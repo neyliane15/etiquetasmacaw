@@ -26,7 +26,9 @@ export function RequireAuth({ children }: { children: ReactNode }): JSX.Element 
           title="Acesso bloqueado"
           description={
             perfil
-              ? 'Seu usuário está inativo. Fale com o administrador da unidade.'
+              ? !perfil.unidade_id && perfil.papel === 'cozinheiro'
+                ? 'Seu cadastro foi recebido e aguarda liberação por um administrador (papel e unidade).'
+                : 'Seu usuário está inativo. Fale com o administrador da unidade.'
               : 'Não foi possível carregar seu perfil. Fale com o administrador.'
           }
           action={<Button onClick={() => void signOut()}>Sair</Button>}

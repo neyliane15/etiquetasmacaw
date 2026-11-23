@@ -89,22 +89,33 @@ export async function emitirEtiquetas(input: NovaEtiquetaInput, copias = 1): Pro
   return ((unwrap(res) ?? []) as Etiqueta[]).map(normEtiqueta);
 }
 
+/**
+ * Emite `copias` etiquetas derivadas (porcionar/descongelar) numa única chamada:
+ * a origem congelada só é baixada depois de criar todas as cópias.
+ */
 export async function emitirEtiquetaDerivada(
   origemId: UUID,
   tipo: TipoEtiqueta,
   metodo: MetodoConservacao,
-  opts?: { quantidade?: number; validadeHoras?: number },
-): Promise<Etiqueta> {
+  opts?: { quantidade?: number; validadeHoras?: number; copias?: number; dataManipulacao?: string },
+): Promise<Etiqueta[]> {
+  const copias = Math.trunc(Number(opts?.copias ?? 1));
+  if (!Number.isFinite(copias) || copias < 1 || copias > 100) {
+    throw new ApiError('Informe de 1 a 100 cópias.');
+  }
   const res = await supabase.rpc('emitir_etiqueta_derivada', {
     p_origem_id: origemId,
     p_tipo: tipo,
     p_metodo: metodo,
     p_quantidade: opts?.quantidade ?? null,
     p_validade_horas: opts?.validadeHoras ?? null,
+    p_copias: copias,
+    p_data_manipulacao: opts?.dataManipulacao ?? null,
   });
-  const e = primeiro(unwrap(res) as Etiqueta | Etiqueta[] | null);
-  if (!e) throw new ApiError('Não foi possível emitir a etiqueta derivada.');
-  return normEtiqueta(e);
+  const v = unwrap(res) as Etiqueta | Etiqueta[] | null;
+  const lista = Array.isArray(v) ? v : v ? [v] : [];
+  if (!lista.length) throw new ApiError('Não foi possível emitir a etiqueta derivada.');
+  return lista.map(normEtiqueta);
 }
 
 export async function registrarImpressao(ids: UUID[]): Promise<void> {

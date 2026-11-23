@@ -83,12 +83,14 @@ export default function DashboardPage(): JSX.Element {
         <div>
           <div style={{ fontWeight: 500 }}>{e.produto_nome}</div>
           <div className="muted mono" style={{ fontSize: 'var(--fs-xs)' }}>{e.codigo}{!unidadeId && ` · ${e.unidade_nome}`}</div>
+          <div className="muted show-mobile" style={{ fontSize: 'var(--fs-xs)' }}>{METODO_ROTULO[e.metodo]}</div>
         </div>
       ),
     },
     {
       key: 'metodo',
       header: 'Método',
+      className: 'hide-mobile',
       render: (e) => (
         <span className="nowrap" style={{ fontSize: 'var(--fs-sm)' }}>
           <span className={`metodo-dot ${e.metodo}`} aria-hidden="true" />
@@ -110,6 +112,7 @@ export default function DashboardPage(): JSX.Element {
       key: 'situacao',
       header: 'Situação',
       align: 'right',
+      className: 'nowrap',
       render: (e) => <Badge variant={corSituacao(e.situacao)} dot>{rotuloSituacao(e.situacao)}</Badge>,
     },
   ];

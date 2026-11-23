@@ -664,7 +664,8 @@ export interface NovaExecucaoChecklistInput {
 
 export interface NovoUsuarioInput {
   email: string;
-  senha: string;
+  /** Senha inicial; vazia/omitida → convite por e-mail. */
+  senha?: string;
   nome: string;
   papel: PapelUsuario;
   unidade_id: UUID | null;

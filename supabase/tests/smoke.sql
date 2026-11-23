@@ -38,10 +38,14 @@ grant usage on schema teste to public;
 grant execute on all functions in schema teste to public;
 
 -- ---------------------------------------------------------------------
--- T01 — primeiro usuário vira admin; seguintes viram cozinheiro
+-- T01 — primeiro usuário vira admin; seguintes viram cozinheiro INATIVO,
+--       sem unidade (o metadata do signUp NÃO é confiável — bug #1); o admin
+--       libera o acesso com admin_definir_perfil.
+-- u_ger    = aaaaaaaa-0000-0000-0000-000000000004 (gerente Camboinhas)
+-- u_estr   = aaaaaaaa-0000-0000-0000-000000000009 (signup público, nunca liberado)
 -- ---------------------------------------------------------------------
 do $$
-declare v_papel text; v_unid uuid; v_nome text;
+declare v_papel text; v_unid uuid; v_nome text; v_ativo boolean;
 begin
   if exists (select 1 from public.perfis) then
     raise exception 'T01 pré-condição: base já possui perfis — rode numa base limpa';
@@ -50,19 +54,49 @@ begin
     ('aaaaaaaa-0000-0000-0000-000000000001', 'admin@macaw.test', '{"nome":"Ana Admin"}');
   insert into auth.users (id, email, raw_user_meta_data) values
     ('aaaaaaaa-0000-0000-0000-000000000002', 'camb@macaw.test',
-     '{"nome":"Carlos Cozinheiro","unidade_id":"11111111-1111-1111-1111-111111111111"}');
+     '{"nome":"Carlos Cozinheiro","unidade_id":"11111111-1111-1111-1111-111111111111","papel":"admin"}');
   insert into auth.users (id, email, raw_user_meta_data) values
     ('aaaaaaaa-0000-0000-0000-000000000003', 'buz@macaw.test',
      '{"nome":"Bia Búzios","unidade_id":"22222222-2222-2222-2222-222222222222"}');
+  insert into auth.users (id, email, raw_user_meta_data) values
+    ('aaaaaaaa-0000-0000-0000-000000000004', 'ger@macaw.test', '{"nome":"Gil Gerente"}');
+  insert into auth.users (id, email, raw_user_meta_data) values
+    ('aaaaaaaa-0000-0000-0000-000000000009', 'estranho@macaw.test',
+     '{"nome":"Estranho","unidade_id":"11111111-1111-1111-1111-111111111111"}');
 
-  select papel, unidade_id into v_papel, v_unid from public.perfis where id = 'aaaaaaaa-0000-0000-0000-000000000001';
-  if v_papel <> 'admin' then raise exception 'T01: 1º usuário deveria ser admin, é %', v_papel; end if;
-  select papel, unidade_id, nome into v_papel, v_unid, v_nome from public.perfis where id = 'aaaaaaaa-0000-0000-0000-000000000002';
-  if v_papel <> 'cozinheiro' then raise exception 'T01: 2º usuário deveria ser cozinheiro, é %', v_papel; end if;
-  if v_unid is distinct from '11111111-1111-1111-1111-111111111111' then raise exception 'T01: unidade do metadata não aplicada'; end if;
+  select papel, ativo into v_papel, v_ativo from public.perfis where id = 'aaaaaaaa-0000-0000-0000-000000000001';
+  if v_papel <> 'admin' or not v_ativo then raise exception 'T01: 1º usuário deveria ser admin ativo, é % %', v_papel, v_ativo; end if;
+  select papel, unidade_id, nome, ativo into v_papel, v_unid, v_nome, v_ativo from public.perfis where id = 'aaaaaaaa-0000-0000-0000-000000000002';
+  if v_papel <> 'cozinheiro' then raise exception 'T01: 2º usuário deveria ser cozinheiro (papel do metadata ignorado), é %', v_papel; end if;
+  if v_unid is not null then raise exception 'T01: unidade do metadata NÃO pode ser aplicada (bug #1)'; end if;
+  if v_ativo then raise exception 'T01: usuário novo deveria nascer inativo'; end if;
   if v_nome <> 'Carlos Cozinheiro' then raise exception 'T01: nome do metadata não aplicado'; end if;
-  raise notice 'OK T01 primeiro usuário admin / demais cozinheiro';
+  raise notice 'OK T01 primeiro usuário admin / demais cozinheiro inativo sem unidade (metadata ignorado)';
 end $$;
+
+-- admin libera os usuários pela RPC
+select teste.login('aaaaaaaa-0000-0000-0000-000000000001');
+set role authenticated;
+do $$
+declare p public.perfis;
+begin
+  p := public.admin_definir_perfil('aaaaaaaa-0000-0000-0000-000000000002', 'cozinheiro', '11111111-1111-1111-1111-111111111111');
+  if not p.ativo or p.unidade_id <> '11111111-1111-1111-1111-111111111111' then raise exception 'T01b: admin_definir_perfil não aplicou'; end if;
+  perform public.admin_definir_perfil('aaaaaaaa-0000-0000-0000-000000000003', 'cozinheiro', '22222222-2222-2222-2222-222222222222');
+  perform public.admin_definir_perfil('aaaaaaaa-0000-0000-0000-000000000004', 'gerente', '11111111-1111-1111-1111-111111111111', true, 'Gil Gerente');
+  begin
+    perform public.admin_definir_perfil('aaaaaaaa-0000-0000-0000-000000000009', 'gerente', null);
+    raise exception 'T01b: gerente sem unidade foi aceito';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.admin_definir_perfil(auth.uid(), 'cozinheiro', '11111111-1111-1111-1111-111111111111');
+    raise exception 'T01b: admin rebaixou a si mesmo';
+  exception when insufficient_privilege then null;
+  end;
+  raise notice 'OK T01b admin_definir_perfil (libera, valida unidade, não se rebaixa)';
+end $$;
+reset role;
 
 -- ---------------------------------------------------------------------
 -- T02 — admin emite etiqueta em Búzios (base para os testes de RLS)
@@ -345,12 +379,21 @@ begin
   if d.quantidade <> 1 or d.unidade_medida <> 'un' or d.motivo <> 'outro' then
     raise exception 'T07: descarte sem qtd: % % %', d.quantidade, d.unidade_medida, d.motivo; end if;
 
-  -- update direto de status (via app) → status_em + movimentação
-  insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo)
-  values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000028', '', 'resfriado')
+  -- update direto de status pelo cliente é bloqueado (bug #2); vencimento via RPC
+  v_ok := false;
+  begin
+    update public.etiquetas set status = 'vencida' where id = teste.get('et_10h')::uuid;
+  exception when insufficient_privilege then v_ok := true;
+  end;
+  if not v_ok then raise exception 'T07: cliente alterou status diretamente'; end if;
+  -- etiqueta já expirada (manipulada há 2 dias, 1 h de validade) → marcar_etiquetas_vencidas
+  insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo, data_manipulacao, validade_horas)
+  values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000028', '', 'resfriado',
+          now() - interval '2 days', 1)
   returning id into v_id;
-  update public.etiquetas set status = 'vencida' where id = v_id returning * into r;
-  if r.status_em is null then raise exception 'T07: update de status sem status_em'; end if;
+  perform public.marcar_etiquetas_vencidas('11111111-1111-1111-1111-111111111111');
+  select * into r from public.etiquetas where id = v_id;
+  if r.status <> 'vencida' or r.status_em is null then raise exception 'T07: vencimento sem status/status_em'; end if;
   select count(*) into n from public.etiqueta_movimentacoes where etiqueta_id = v_id and tipo = 'vencimento';
   if n <> 1 then raise exception 'T07: movimentação vencimento = %', n; end if;
   -- descarte de etiqueta vencida → motivo padrão 'vencido'
@@ -373,7 +416,7 @@ end $$;
 do $$
 declare o public.etiquetas; nv public.etiquetas; v_ok boolean := false; v_id uuid;
 begin
-  nv := public.emitir_etiqueta_derivada(teste.get('et_cong')::uuid, 'descongelamento', 'descongelando');
+  select * into nv from public.emitir_etiqueta_derivada(teste.get('et_cong')::uuid, 'descongelamento', 'descongelando');
   select * into o from public.etiquetas where id = teste.get('et_cong')::uuid;
   if nv.etiqueta_origem_id <> o.id then raise exception 'T08: etiqueta_origem_id'; end if;
   if nv.metodo <> 'descongelando' or nv.tipo <> 'descongelamento' then raise exception 'T08: tipo/método'; end if;
@@ -390,7 +433,7 @@ begin
   if not v_ok then raise exception 'T08: derivar de origem consumida deveria falhar'; end if;
 
   -- porcionado no mesmo método: validade limitada à da origem (10 h < 72 h)
-  nv := public.emitir_etiqueta_derivada(teste.get('et_10h')::uuid, 'porcionado', 'resfriado', 0.3);
+  select * into nv from public.emitir_etiqueta_derivada(teste.get('et_10h')::uuid, 'porcionado', 'resfriado', 0.3);
   select * into o from public.etiquetas where id = teste.get('et_10h')::uuid;
   if nv.data_validade <> o.data_validade then
     raise exception 'T08: porcionado ultrapassa validade da origem: % > %', nv.data_validade, o.data_validade; end if;
@@ -504,7 +547,7 @@ begin
   select count(distinct unidade_id) into n from public.etiquetas;
   if n <> 2 then raise exception 'T12: admin deveria ver as 2 unidades, vê %', n; end if;
   select count(*) into n from public.perfis;
-  if n <> 3 then raise exception 'T12: admin vê % perfis', n; end if;
+  if n <> 5 then raise exception 'T12: admin vê % perfis', n; end if;
   -- último admin não pode ser rebaixado
   begin
     update public.perfis set papel = 'gerente' where id = auth.uid();
@@ -529,6 +572,429 @@ begin
     raise exception 'T13: etiqueta não marcada como vencida'; end if;
   raise notice 'OK T13 recálculo de validade no update + marcar_etiquetas_vencidas (%)', n;
 end $$;
+
+-- =====================================================================
+-- Regressões da revisão (docs/REVISAO.md) — T14..T23
+-- =====================================================================
+
+-- T14 — RLS habilitada em todas as tabelas; anon sem acesso a NENHUMA
+--       tabela/view e sem EXECUTE em funções (exceto consulta pública) — bug #9
+do $$
+declare t text;
+begin
+  select string_agg(relname, ', ') into t from pg_class
+   where relnamespace = 'public'::regnamespace and relkind = 'r' and not relrowsecurity;
+  if t is not null then raise exception 'T14: tabelas sem RLS: %', t; end if;
+  select string_agg(p.proname, ', ') into t from pg_proc p
+   where p.pronamespace = 'public'::regnamespace
+     and p.proname <> 'consultar_etiqueta_publica'
+     and has_function_privilege('anon', p.oid, 'execute');
+  if t is not null then raise exception 'T14: anon executa: %', t; end if;
+  if not has_function_privilege('anon', 'public.consultar_etiqueta_publica(text)', 'execute') then
+    raise exception 'T14: anon perdeu a consulta pública'; end if;
+  if not (select prosecdef from pg_proc where proname = 'gerar_codigo_etiqueta') then
+    raise exception 'T14: gerar_codigo_etiqueta deveria ser security definer (bug #11)'; end if;
+end $$;
+select teste.login(null);
+set role anon;
+do $$
+declare t text; v_ok boolean;
+begin
+  for t in select c.relname from pg_class c
+            where c.relnamespace = 'public'::regnamespace and c.relkind in ('r','v') loop
+    v_ok := false;
+    begin
+      execute format('select 1 from public.%I limit 1', t);
+    exception when insufficient_privilege then v_ok := true;
+    end;
+    if not v_ok then raise exception 'T14: anon leu public.%', t; end if;
+  end loop;
+  v_ok := false;
+  begin perform public.is_admin(); exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T14: anon executou is_admin()'; end if;
+  v_ok := false;
+  begin perform public.admin_definir_perfil('aaaaaaaa-0000-0000-0000-000000000009', 'admin', null);
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T14: anon executou admin_definir_perfil'; end if;
+  raise notice 'OK T14 RLS em todas as tabelas; anon sem tabelas/views/funções internas';
+end $$;
+reset role;
+
+-- T15 — usuário de signup público (inativo, sem unidade) não vê nada e não se promove — bug #1
+select teste.login('aaaaaaaa-0000-0000-0000-000000000009');
+set role authenticated;
+do $$
+declare t text; n int; v_ok boolean;
+begin
+  foreach t in array array['unidades','categorias','fornecedores','produtos','modelos_etiqueta','checklists',
+                           'checklist_itens','etiquetas','descartes','equipamentos','registros_temperatura',
+                           'recebimentos','vw_etiquetas'] loop
+    execute format('select count(*) from public.%I', t) into n;
+    if n <> 0 then raise exception 'T15: usuário não liberado vê % linhas em %', n, t; end if;
+  end loop;
+  select count(*) into n from public.perfis;
+  if n <> 1 then raise exception 'T15: deveria ver só o próprio perfil'; end if;
+  v_ok := false;
+  begin perform public.admin_definir_perfil(auth.uid(), 'admin', null);
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T15: não-admin usou admin_definir_perfil'; end if;
+  v_ok := false;
+  begin update public.perfis set ativo = true, unidade_id = '11111111-1111-1111-1111-111111111111' where id = auth.uid();
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T15: usuário se ativou/vinculou sozinho'; end if;
+  v_ok := false;
+  begin
+    insert into public.etiquetas (unidade_id, produto_nome, metodo, validade_horas)
+    values ('11111111-1111-1111-1111-111111111111', 'x', 'ambiente', 5);
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T15: usuário não liberado emitiu etiqueta'; end if;
+  raise notice 'OK T15 signup público sem acesso até liberação pelo admin';
+end $$;
+reset role;
+-- gerente também não usa a RPC de admin
+select teste.login('aaaaaaaa-0000-0000-0000-000000000004');
+set role authenticated;
+do $$
+begin
+  begin
+    perform public.admin_definir_perfil('aaaaaaaa-0000-0000-0000-000000000002', 'gerente', '11111111-1111-1111-1111-111111111111');
+    raise exception 'T15: gerente usou admin_definir_perfil';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.perfis set papel = 'gerente' where id = 'aaaaaaaa-0000-0000-0000-000000000002';
+    if found then raise exception 'T15: gerente alterou perfil de outro usuário'; end if;
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+-- T16 — cozinheiro: escrita direta em etiquetas restrita — bug #2
+select teste.login('aaaaaaaa-0000-0000-0000-000000000002');
+set role authenticated;
+do $$
+declare r public.etiquetas; v_ok boolean; v_id uuid; t text;
+begin
+  insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo,
+                                responsavel_id, responsavel_nome, created_by, impressoes)
+  values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000006', '', 'resfriado',
+          'aaaaaaaa-0000-0000-0000-000000000001', 'Chef Falso', 'aaaaaaaa-0000-0000-0000-000000000001', 50)
+  returning * into r;
+  if r.responsavel_id <> auth.uid() or r.created_by <> auth.uid() or r.responsavel_nome <> 'Carlos Cozinheiro'
+     or r.impressoes <> 0 then
+    raise exception 'T16: campos forjados aceitos: % % % %', r.responsavel_id, r.created_by, r.responsavel_nome, r.impressoes;
+  end if;
+  v_id := r.id;
+  perform teste.put('et_t16', v_id::text);
+
+  foreach t in array array[
+    'data_validade = now() + interval ''365 days''', 'validade_horas = 9999', 'status = ''consumida''',
+    'metodo = ''congelado''', 'data_manipulacao = now() + interval ''1 day''', 'unidade_id = unidade_id, lote = ''L2''',
+    'impressoes = 7', 'responsavel_nome = ''Outro''', 'produto_nome = ''Outro produto''', 'alergenicos = array[''gluten'']'] loop
+    v_ok := false;
+    begin
+      execute format('update public.etiquetas set %s where id = %L', t, v_id);
+    exception when insufficient_privilege then v_ok := true;
+    end;
+    if not v_ok then raise exception 'T16: cliente conseguiu: %', t; end if;
+  end loop;
+
+  update public.etiquetas set observacoes = 'ok, campo editorial' where id = v_id;
+  if not found then raise exception 'T16: observacoes deveria ser editável'; end if;
+
+  foreach t in array array[
+    $i$insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo, status) values ('11111111-1111-1111-1111-111111111111','a0000000-0000-0000-0000-000000000006','','resfriado','consumida')$i$,
+    format($i$insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo, etiqueta_origem_id) values ('11111111-1111-1111-1111-111111111111','a0000000-0000-0000-0000-000000000006','','resfriado',%L)$i$, v_id)] loop
+    v_ok := false;
+    begin execute t; exception when insufficient_privilege then v_ok := true; end;
+    if not v_ok then raise exception 'T16: insert indevido aceito: %', t; end if;
+  end loop;
+
+  -- após a baixa, reativar pelo cliente é impossível
+  perform public.dar_baixa_etiqueta(v_id, 'descartada', 'qualidade');
+  v_ok := false;
+  begin update public.etiquetas set status = 'ativa' where id = v_id;
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T16: cliente reativou etiqueta descartada'; end if;
+  raise notice 'OK T16 cliente não altera validade/status/snapshots; só observações e modelo';
+end $$;
+
+-- T17 — movimentações imutáveis pelo cliente — bug #3
+do $$
+declare v_ok boolean; n int;
+begin
+  v_ok := false;
+  begin
+    insert into public.etiqueta_movimentacoes (etiqueta_id, tipo, detalhes)
+    values (teste.get('et_t16')::uuid, 'consumo', '{"fake":true}');
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T17: cliente inseriu movimentação'; end if;
+  v_ok := false;
+  begin delete from public.etiqueta_movimentacoes where etiqueta_id = teste.get('et_t16')::uuid;
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T17: cliente apagou movimentação'; end if;
+  select count(*) into n from public.etiqueta_movimentacoes where etiqueta_id = teste.get('et_t16')::uuid;
+  if n < 3 then raise exception 'T17: histórico incompleto (% movimentações)', n; end if;
+  raise notice 'OK T17 histórico de movimentações imutável (gravado só por triggers/RPCs)';
+end $$;
+
+-- T18 — descartes: custo/peso do servidor, limites e unidade da etiqueta — bug #4
+do $$
+declare d public.descartes; v_ok boolean;
+begin
+  insert into public.descartes (unidade_id, produto_id, produto_nome, motivo, quantidade, unidade_medida,
+                                custo_estimado, peso_kg, responsavel_id)
+  values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000001', 'x', 'outro', 1, 'kg',
+          999999, 777, 'aaaaaaaa-0000-0000-0000-000000000001')
+  returning * into d;
+  if d.custo_estimado <> 89.90 or d.peso_kg <> 1 or d.responsavel_id <> auth.uid() then
+    raise exception 'T18: custo/peso/responsável do cliente aceitos: % % %', d.custo_estimado, d.peso_kg, d.responsavel_id; end if;
+  insert into public.descartes (unidade_id, produto_nome, motivo, quantidade, unidade_medida, custo_estimado)
+  values ('11111111-1111-1111-1111-111111111111', 'avulso', 'outro', 1, 'un', 999999) returning * into d;
+  if d.custo_estimado is not null then raise exception 'T18: custo avulso do cozinheiro aceito'; end if;
+
+  v_ok := false;
+  begin
+    insert into public.descartes (unidade_id, produto_id, produto_nome, motivo, quantidade, unidade_medida)
+    values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000001', 'x', 'outro', 100000, 'kg');
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T18: descarte de 100 t aceito'; end if;
+  v_ok := false;
+  begin
+    insert into public.descartes (unidade_id, produto_nome, motivo, quantidade, unidade_medida, descartado_em)
+    values ('11111111-1111-1111-1111-111111111111', 'x', 'outro', 1, 'kg', now() + interval '2 days');
+  exception when invalid_parameter_value then v_ok := true; end;
+  if not v_ok then raise exception 'T18: descarte no futuro aceito'; end if;
+  v_ok := false;
+  begin
+    insert into public.descartes (unidade_id, etiqueta_id, produto_nome, motivo, quantidade, unidade_medida)
+    values ('11111111-1111-1111-1111-111111111111', teste.get('et_buz')::uuid, '', 'outro', 1, 'kg');
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T18: descarte com etiqueta de outra unidade aceito'; end if;
+  v_ok := false;
+  declare v_id uuid;
+  begin
+    insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo, quantidade)
+    values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000001', '', 'resfriado', 2)
+    returning id into v_id;
+    perform public.dar_baixa_etiqueta(v_id, 'descartada', null, 500);
+  exception when invalid_parameter_value then v_ok := true; end;
+  if not v_ok then raise exception 'T18: baixa maior que a quantidade da etiqueta aceita'; end if;
+  raise notice 'OK T18 descarte: custo/peso calculados no servidor, limites, unidade da etiqueta';
+end $$;
+reset role;
+-- gerente pode informar custo manual
+select teste.login('aaaaaaaa-0000-0000-0000-000000000004');
+set role authenticated;
+do $$
+declare d public.descartes;
+begin
+  insert into public.descartes (unidade_id, produto_nome, motivo, quantidade, unidade_medida, custo_estimado)
+  values ('11111111-1111-1111-1111-111111111111', 'avulso', 'outro', 2, 'un', 30) returning * into d;
+  if d.custo_estimado <> 30 then raise exception 'T18: custo do gerente ignorado'; end if;
+end $$;
+reset role;
+
+-- T19 — derivada: várias cópias, manipulação informada, acesso por unidade — bugs #5/#6
+select teste.login('aaaaaaaa-0000-0000-0000-000000000002');
+set role authenticated;
+do $$
+declare v_org uuid; n int; v_ok boolean; v_manip timestamptz := date_trunc('minute', now() - interval '30 minutes');
+  v_mins timestamptz; v_maxs timestamptz; v_val boolean; v_cods int; v_st text;
+begin
+  insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo, data_manipulacao)
+  values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000001', '', 'congelado',
+          now() - interval '1 day')
+  returning id into v_org;
+
+  select count(*), min(data_manipulacao), max(data_manipulacao),
+         bool_and(data_validade = v_manip + interval '72 hours' and etiqueta_origem_id = v_org),
+         count(distinct codigo)
+    into n, v_mins, v_maxs, v_val, v_cods
+    from public.emitir_etiqueta_derivada(v_org, 'descongelamento', 'descongelando', null, null, 3, v_manip);
+  if n <> 3 or v_cods <> 3 then raise exception 'T19: esperava 3 derivadas com códigos distintos, veio % / %', n, v_cods; end if;
+  if v_mins <> v_manip or v_maxs <> v_manip then raise exception 'T19: data de manipulação informada ignorada (bug #6)'; end if;
+  if not v_val then raise exception 'T19: validade/origem das derivadas incorreta'; end if;
+  select status into v_st from public.etiquetas where id = v_org;
+  if v_st <> 'consumida' then raise exception 'T19: origem congelada deveria estar consumida'; end if;
+  select count(*) into n from public.etiqueta_movimentacoes where etiqueta_id = v_org and tipo = 'consumo';
+  if n <> 1 then raise exception 'T19: origem baixada % vezes', n; end if;
+
+  -- manipulação anterior à origem → erro
+  insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo)
+  values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000001', '', 'congelado')
+  returning id into v_org;
+  v_ok := false;
+  begin perform public.emitir_etiqueta_derivada(v_org, 'porcionado', 'congelado', null, null, 1, now() - interval '3 days');
+  exception when invalid_parameter_value then v_ok := true; end;
+  if not v_ok then raise exception 'T19: manipulação anterior à origem aceita'; end if;
+  -- validade acima do padrão (congelado 720 h) por cozinheiro → erro
+  v_ok := false;
+  begin perform public.emitir_etiqueta_derivada(v_org, 'porcionado', 'resfriado', null, 500);
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T19: derivada acima do padrão aceita para cozinheiro'; end if;
+  -- cópias fora do limite
+  v_ok := false;
+  begin perform public.emitir_etiqueta_derivada(v_org, 'porcionado', 'congelado', null, null, 101);
+  exception when invalid_parameter_value then v_ok := true; end;
+  if not v_ok then raise exception 'T19: 101 cópias aceitas'; end if;
+
+  -- RPCs security definer não alcançam etiqueta de outra unidade
+  v_ok := false;
+  begin perform public.emitir_etiqueta_derivada(teste.get('et_buz')::uuid, 'porcionado', 'resfriado');
+  exception when no_data_found then v_ok := true; end;
+  if not v_ok then raise exception 'T19: derivou etiqueta de Búzios'; end if;
+  v_ok := false;
+  begin perform public.registrar_reimpressao(teste.get('et_buz')::uuid);
+  exception when no_data_found then v_ok := true; end;
+  if not v_ok then raise exception 'T19: reimprimiu etiqueta de Búzios'; end if;
+  perform public.registrar_impressao(array[teste.get('et_buz')::uuid]);
+  raise notice 'OK T19 derivada com cópias + manipulação; RPCs definer respeitam a unidade';
+end $$;
+reset role;
+do $$
+begin
+  if (select impressoes from public.etiquetas where id = teste.get('et_buz')::uuid) <> 0 then
+    raise exception 'T19: registrar_impressao alterou etiqueta de Búzios'; end if;
+end $$;
+
+-- T20 — limites de validade/manipulação na emissão direta — bug #8
+select teste.login('aaaaaaaa-0000-0000-0000-000000000002');
+set role authenticated;
+do $$
+declare t text; v_ok boolean; r public.etiquetas;
+begin
+  foreach t in array array[
+    'validade_horas, data_manipulacao) values (''11111111-1111-1111-1111-111111111111'',''a0000000-0000-0000-0000-000000000001'','''',''resfriado'', 23976, now())',
+    'validade_horas, data_manipulacao) values (''11111111-1111-1111-1111-111111111111'',''a0000000-0000-0000-0000-000000000001'','''',''resfriado'', 73, now())',
+    'data_validade, data_manipulacao) values (''11111111-1111-1111-1111-111111111111'',''a0000000-0000-0000-0000-000000000001'','''',''resfriado'', now() + interval ''10 days'', now())',
+    'validade_horas, data_manipulacao) values (''11111111-1111-1111-1111-111111111111'',''a0000000-0000-0000-0000-000000000001'','''',''resfriado'', 24, now() - interval ''10 days'')'] loop
+    v_ok := false;
+    begin
+      execute 'insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo, ' || t;
+    exception when insufficient_privilege or invalid_parameter_value then v_ok := true;
+    end;
+    if not v_ok then raise exception 'T20: cozinheiro emitiu fora do limite: %', t; end if;
+  end loop;
+  v_ok := false;
+  begin
+    insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo, data_manipulacao)
+    values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000001', '', 'resfriado', now() + interval '1 day');
+  exception when invalid_parameter_value then v_ok := true; end;
+  if not v_ok then raise exception 'T20: manipulação no futuro aceita'; end if;
+  -- validade menor que o padrão é permitida
+  insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo, validade_horas)
+  values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000001', '', 'resfriado', 48)
+  returning * into r;
+  if r.validade_horas <> 48 then raise exception 'T20: validade menor que o padrão rejeitada'; end if;
+  raise notice 'OK T20 cozinheiro limitado ao padrão do produto; manipulação futura/retroativa bloqueada';
+end $$;
+reset role;
+select teste.login('aaaaaaaa-0000-0000-0000-000000000004');
+set role authenticated;
+do $$
+declare r public.etiquetas; v_ok boolean := false;
+begin
+  insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo, validade_horas)
+  values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000001', '', 'resfriado', 120)
+  returning * into r;
+  if r.validade_horas <> 120 then raise exception 'T20: gerente não pôde estender'; end if;
+  begin
+    insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo, validade_horas)
+    values ('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000001', '', 'resfriado', 9000);
+  exception when invalid_parameter_value then v_ok := true; end;
+  if not v_ok then raise exception 'T20: validade > 365 dias aceita para gerente'; end if;
+  raise notice 'OK T20b gerente estende até 365 dias';
+end $$;
+
+-- T21 — gerente: checklist_itens só da própria unidade (global → admin); RLS por unidade — achado novo
+do $$
+declare v_ok boolean; v_ck uuid; n int;
+begin
+  v_ok := false;
+  begin
+    insert into public.checklist_itens (checklist_id, texto) values ('d0000000-0000-0000-0000-000000000001', 'item pirata');
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T21: gerente alterou checklist global'; end if;
+  delete from public.checklist_itens where checklist_id = 'd0000000-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'T21: gerente apagou % itens do checklist global', n; end if;
+  insert into public.checklists (unidade_id, nome) values ('11111111-1111-1111-1111-111111111111', 'Da unidade')
+  returning id into v_ck;
+  insert into public.checklist_itens (checklist_id, texto) values (v_ck, 'item ok');
+  -- gerente não cria produto global nem de Búzios; não vê Búzios
+  v_ok := false;
+  begin insert into public.produtos (nome, validade_resfriado_horas) values ('Global do gerente', 24);
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T21: gerente criou produto global'; end if;
+  insert into public.produtos (nome, unidade_id, validade_resfriado_horas)
+  values ('Exclusivo Camboinhas', '11111111-1111-1111-1111-111111111111', 24)
+  returning id into v_ck;
+  perform teste.put('prod_excl', v_ck::text);
+  select count(*) into n from public.etiquetas where unidade_id = '22222222-2222-2222-2222-222222222222';
+  if n <> 0 then raise exception 'T21: gerente de Camboinhas vê Búzios'; end if;
+  select count(*) into n from public.perfis;
+  if n <> 2 then raise exception 'T21: gerente deveria ver só os 2 perfis de Camboinhas, viu %', n; end if;
+  raise notice 'OK T21 gerente restrito à própria unidade (checklists, produtos, perfis)';
+end $$;
+reset role;
+
+-- produto exclusivo de Camboinhas não pode ser usado em Búzios (nem visto)
+select teste.login('aaaaaaaa-0000-0000-0000-000000000003');
+set role authenticated;
+do $$
+declare n int; t text;
+begin
+  select count(*) into n from public.produtos where nome = 'Exclusivo Camboinhas';
+  if n <> 0 then raise exception 'T21: Búzios vê produto exclusivo de Camboinhas'; end if;
+  begin
+    insert into public.etiquetas (unidade_id, produto_id, produto_nome, metodo)
+    select '22222222-2222-2222-2222-222222222222', id, '', 'resfriado' from (
+      select teste.get('prod_excl')::uuid as id) x;
+    raise exception 'T21: Búzios emitiu etiqueta com produto exclusivo de Camboinhas';
+  exception when insufficient_privilege then null;
+  end;
+  -- matriz de RLS: nenhuma tabela com unidade_id vaza linhas de Camboinhas para Búzios
+  for t in select c.table_name from information_schema.columns c
+            join information_schema.tables tb on tb.table_schema = c.table_schema and tb.table_name = c.table_name
+           where c.table_schema = 'public' and c.column_name = 'unidade_id' loop
+    execute format('select count(*) from public.%I where unidade_id = %L', t, '11111111-1111-1111-1111-111111111111') into n;
+    if n <> 0 then raise exception 'T21: Búzios vê % linhas de Camboinhas em %', n, t; end if;
+  end loop;
+end $$;
+reset role;
+
+-- T22 — temperatura: conformidade recalculada em qualquer update; responsável/horário — achado novo
+select teste.login('aaaaaaaa-0000-0000-0000-000000000004');
+set role authenticated;
+do $$
+declare r public.registros_temperatura; v_ok boolean := false;
+begin
+  insert into public.registros_temperatura (equipamento_id, temperatura_c, conforme, responsavel_id)
+  values ('e1000000-0000-0000-0000-000000000001', 12, true, 'aaaaaaaa-0000-0000-0000-000000000001') returning * into r;
+  if r.conforme or r.responsavel_id <> auth.uid() then raise exception 'T22: conforme/responsável do cliente aceitos'; end if;
+  update public.registros_temperatura set conforme = true where id = r.id returning * into r;
+  if r.conforme then raise exception 'T22: gerente marcou conforme sem mudar a temperatura'; end if;
+  begin
+    insert into public.registros_temperatura (equipamento_id, temperatura_c, conforme, registrado_em)
+    values ('e1000000-0000-0000-0000-000000000001', 3, true, now() + interval '1 day');
+  exception when invalid_parameter_value then v_ok := true; end;
+  if not v_ok then raise exception 'T22: registro no futuro aceito'; end if;
+  raise notice 'OK T22 temperatura: conformidade sempre do servidor; responsável e horário controlados';
+end $$;
+reset role;
+select teste.login('aaaaaaaa-0000-0000-0000-000000000002');
+set role authenticated;
+do $$
+declare v_ok boolean := false;
+begin
+  begin
+    insert into public.registros_temperatura (equipamento_id, temperatura_c, conforme, registrado_em)
+    values ('e1000000-0000-0000-0000-000000000001', 3, true, now() - interval '3 days');
+  exception when insufficient_privilege then v_ok := true; end;
+  if not v_ok then raise exception 'T22: cozinheiro registrou temperatura retroativa de 3 dias'; end if;
+end $$;
+reset role;
 
 \o
 \echo 'SMOKE SQL: TODOS OS TESTES PASSARAM'

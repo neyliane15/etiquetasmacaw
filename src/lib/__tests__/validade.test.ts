@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  VALIDADE_MAXIMA_HORAS,
+  diaOperacao,
+  validarPrazoEmissao,
   calcularValidade,
   descreverPrazo,
   diasHorasParaHoras,
@@ -48,8 +51,8 @@ describe('calcularValidade', () => {
 });
 
 describe('situacaoValidade', () => {
-  // agora fixo: 10:00 local de um dia qualquer
-  const agora = new Date(2026, 5, 15, 10, 0, 0);
+  // agora fixo: 10:00 em São Paulo (13:00 UTC) — independe do fuso da máquina
+  const agora = new Date('2026-06-15T13:00:00Z');
   const em = (horas: number) => new Date(agora.getTime() + horas * H);
   it('vencida (passado e exatamente agora)', () => {
     expect(situacaoValidade(em(-1), agora)).toBe('vencida');
@@ -57,7 +60,14 @@ describe('situacaoValidade', () => {
   });
   it('vence_hoje (mesmo dia civil)', () => {
     expect(situacaoValidade(em(5), agora)).toBe('vence_hoje');
-    expect(situacaoValidade(new Date(2026, 5, 15, 23, 59), agora)).toBe('vence_hoje');
+    expect(situacaoValidade(new Date('2026-06-16T02:59:00Z'), agora)).toBe('vence_hoje'); // 23:59 SP
+  });
+  it('vence_hoje usa America/Sao_Paulo, não o fuso do navegador (bug #10)', () => {
+    // 22:00 SP = 01:00 UTC do dia seguinte: para um navegador em UTC seria "amanhã"
+    expect(situacaoValidade(new Date('2026-06-16T01:00:00Z'), agora)).toBe('vence_hoje');
+    // 00:30 SP do dia seguinte = 03:30 UTC: não é mais hoje em SP
+    expect(situacaoValidade(new Date('2026-06-16T03:30:00Z'), agora)).toBe('vence_24h');
+    expect(diaOperacao(new Date('2026-06-16T02:59:00Z'))).toBe('2026-06-15');
   });
   it('vence_24h (amanhã, dentro de 24 h)', () => {
     expect(situacaoValidade(em(20), agora)).toBe('vence_24h');
@@ -149,5 +159,42 @@ describe('ordenarPVPS', () => {
     expect(ord.map((i) => i.id)).toEqual(['a', 'c', 'b']);
     expect(itens.map((i) => i.id)).toEqual(copia);
     expect(ord).not.toBe(itens);
+  });
+});
+
+describe('validarPrazoEmissao (espelha validar_prazo_etiqueta, bug #8)', () => {
+  const agora = new Date('2026-06-15T13:00:00Z');
+  const base = { horasPadrao: 72, manipulacao: agora, agora };
+  it('cozinheiro: até o padrão ok, acima do padrão bloqueia', () => {
+    expect(validarPrazoEmissao({ ...base, horas: 72, gestor: false })).toEqual([]);
+    expect(validarPrazoEmissao({ ...base, horas: 48, gestor: false })).toEqual([]);
+    expect(validarPrazoEmissao({ ...base, horas: 73, gestor: false })[0]).toMatch(/acima do padrão/);
+  });
+  it('gestor pode estender até 365 dias', () => {
+    expect(validarPrazoEmissao({ ...base, horas: 500, gestor: true })).toEqual([]);
+    expect(validarPrazoEmissao({ ...base, horas: VALIDADE_MAXIMA_HORAS + 1, gestor: true })[0]).toMatch(/365 dias/);
+  });
+  it('produto avulso (sem padrão) só respeita o máximo', () => {
+    expect(validarPrazoEmissao({ ...base, horasPadrao: null, horas: 1000, gestor: false })).toEqual([]);
+    expect(validarPrazoEmissao({ ...base, horasPadrao: null, horas: 9000, gestor: false })).toHaveLength(1);
+  });
+  it('manipulação no futuro (> 1 h) e retroativa > 7 dias para cozinheiro', () => {
+    const futuro = new Date(agora.getTime() + 2 * H);
+    expect(validarPrazoEmissao({ ...base, manipulacao: futuro, horas: 10, gestor: true })[0]).toMatch(/futuro/);
+    const antiga = new Date(agora.getTime() - 8 * 24 * H);
+    expect(validarPrazoEmissao({ ...base, manipulacao: antiga, horas: 10, gestor: false })[0]).toMatch(/7 dias/);
+    expect(validarPrazoEmissao({ ...base, manipulacao: antiga, horas: 10, gestor: true })).toEqual([]);
+  });
+  it('derivada: manipulação não pode ser anterior à da origem', () => {
+    const origem = new Date(agora.getTime() + 0);
+    const antes = new Date(agora.getTime() - H);
+    expect(
+      validarPrazoEmissao({ ...base, manipulacao: antes, manipulacaoMinima: origem, horas: 10, gestor: true })[0],
+    ).toMatch(/origem/);
+  });
+  it('data inválida', () => {
+    expect(validarPrazoEmissao({ ...base, manipulacao: new Date('x'), horas: 10, gestor: true })).toEqual([
+      'Data de manipulação inválida.',
+    ]);
   });
 });

@@ -31,10 +31,32 @@ export function onAuthChange(cb: (userId: UUID | null) => void): () => void {
   return () => data.subscription.unsubscribe();
 }
 
+/** Rota que recebe o link de recuperação/convite e permite definir a senha. */
+export const ROTA_REDEFINIR_SENHA = '/redefinir-senha';
+
 export async function enviarResetSenha(email: string): Promise<void> {
-  const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
+  const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}${ROTA_REDEFINIR_SENHA}` : undefined;
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
   if (error) throw toApiError(error);
+}
+
+/** Dispara quando o Supabase processa um link de recuperação de senha. */
+export function onPasswordRecovery(cb: () => void): () => void {
+  const { data } = supabase.auth.onAuthStateChange((evento) => {
+    if (evento === 'PASSWORD_RECOVERY') cb();
+  });
+  return () => data.subscription.unsubscribe();
+}
+
+/** true se a URL atual veio de um link de recuperação/convite do Supabase. */
+export function urlDeRecuperacao(href: string): boolean {
+  return /[#?&]type=(recovery|invite)\b/.test(href);
+}
+
+export function validarNovaSenha(nova: string, confirmacao: string): string | null {
+  if (nova.length < 8) return 'A senha deve ter pelo menos 8 caracteres.';
+  if (nova !== confirmacao) return 'As senhas não conferem.';
+  return null;
 }
 
 export async function atualizarSenha(nova: string): Promise<void> {

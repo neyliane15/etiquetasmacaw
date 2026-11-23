@@ -1,6 +1,7 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { ROTA_REDEFINIR_SENHA, onPasswordRecovery, urlDeRecuperacao } from '@/lib/api/auth';
 import type { PapelUsuario } from '@/types/database';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { UnidadeProvider } from '@/contexts/UnidadeContext';
@@ -33,6 +34,7 @@ const RelatoriosPage = lazy(() => import('@/pages/relatorios/RelatoriosPage'));
 const UsuariosPage = lazy(() => import('@/pages/usuarios/UsuariosPage'));
 const UnidadesPage = lazy(() => import('@/pages/unidades/UnidadesPage'));
 const ConsultaQrPage = lazy(() => import('@/pages/publico/ConsultaQrPage'));
+const RedefinirSenhaPage = lazy(() => import('@/pages/RedefinirSenhaPage'));
 
 const GESTOR: PapelUsuario[] = ['admin', 'gerente'];
 const ADMIN: PapelUsuario[] = ['admin'];
@@ -57,12 +59,32 @@ function Papel({ papeis, children }: { papeis: PapelUsuario[]; children: ReactNo
   );
 }
 
+/** Leva links de recuperação/convite (mesmo os antigos, que apontavam para /login) à tela de nova senha. */
+function RecuperacaoSenha(): null {
+  const navigate = useNavigate();
+  const location = useLocation();
+  useEffect(() => {
+    if (location.pathname !== ROTA_REDEFINIR_SENHA && urlDeRecuperacao(window.location.href)) {
+      navigate(`${ROTA_REDEFINIR_SENHA}${window.location.hash}`, { replace: true });
+    }
+    try {
+      return onPasswordRecovery(() => navigate(ROTA_REDEFINIR_SENHA, { replace: true }));
+    } catch {
+      return undefined;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
 export default function App(): JSX.Element {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <RecuperacaoSenha />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path={ROTA_REDEFINIR_SENHA} element={<Lazy><RedefinirSenhaPage /></Lazy>} />
           <Route path="/q/:codigo" element={<Lazy><ConsultaQrPage /></Lazy>} />
 
           <Route

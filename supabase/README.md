@@ -8,12 +8,19 @@ supabase/
 ├── migrations/
 │   ├── 0001_schema.sql        # extensões, enums, tabelas, índices, funções e triggers
 │   ├── 0002_rls_policies.sql  # RLS, grants e trigger perfis_protege_campos
-│   └── 0003_rpc_views.sql     # views (vw_*) e RPCs usadas pelo app
+│   ├── 0003_rpc_views.sql     # views (vw_*) e RPCs usadas pelo app
+│   └── 0004_correcoes_revisao.sql # correções de segurança/integridade da revisão (docs/REVISAO.md)
+├── functions/admin-criar-usuario/ # Edge Function: admin cria/convida usuários (service role no servidor)
 ├── seed.sql                   # unidades, categorias, produtos, modelos, equipamentos, checklists
-└── tests/auth_stub.sql        # stub do schema auth — SOMENTE para Postgres local de teste
+└── tests/
+    ├── auth_stub.sql          # stub do schema auth — SOMENTE para Postgres local de teste
+    └── smoke.sql              # smoke tests (T01–T22), transação com ROLLBACK
 ```
 
-> **Ordem obrigatória:** `0001` → `0002` → `0003` → `seed.sql`.
+> **Ordem obrigatória:** `0001` → `0002` → `0003` → `0004` → `seed.sql`.
+> **Já aplicou 0001–0003?** Basta executar `0004_correcoes_revisao.sql` (e, se quiser, o seed de novo).
+> Sempre que reaplicar migrações antigas, reaplique também as seguintes, na ordem (o `0004`
+> redefine funções e políticas criadas em `0001`–`0003`).
 > Não aplique `tests/auth_stub.sql` num projeto Supabase real (o Supabase já tem o schema `auth`).
 
 ---
@@ -24,12 +31,13 @@ supabase/
 
 1. Abra o projeto em <https://supabase.com/dashboard> → **SQL Editor** → **New query**.
 2. Cole o conteúdo de `migrations/0001_schema.sql` e clique em **Run**.
-3. Repita, **nessa ordem**, com `0002_rls_policies.sql`, `0003_rpc_views.sql` e `seed.sql`.
+3. Repita, **nessa ordem**, com `0002_rls_policies.sql`, `0003_rpc_views.sql`,
+   `0004_correcoes_revisao.sql` e `seed.sql`.
 4. Confira em **Table Editor** que as tabelas `unidades`, `produtos`, `modelos_etiqueta` etc. foram criadas
    e populadas (2 unidades, 15 categorias, 60 produtos, 5 modelos, 10 equipamentos, 2 checklists).
 
-`0002`, `0003` e `seed.sql` são idempotentes (podem ser executados de novo sem duplicar dados).
-O `0001` cria tipos e tabelas: execute-o uma única vez numa base vazia.
+Todos os arquivos (`0001`–`0004` e `seed.sql`) são idempotentes: foram aplicados duas vezes
+seguidas sem erro e sem duplicar dados (o `0001` usa `if not exists`/`create or replace`).
 
 ### Opção B — Supabase CLI
 
@@ -51,26 +59,26 @@ Para desenvolvimento local com Docker: `supabase start` e depois `supabase db re
 Em **Authentication → Providers → Email**:
 
 - Mantenha **Email** habilitado (login por e-mail e senha).
-- **Confirm email**:
-  - **Desligado (recomendado)**: o admin cria usuários pela tela *Usuários* do app e eles
-    entram imediatamente com a senha definida.
-  - **Ligado**: o usuário criado recebe um e-mail de confirmação e só consegue entrar
-    depois de confirmar. Alternativa: convidar pelo dashboard (*Authentication → Users → Invite*).
+- **Desative “Allow new users to sign up”** (*Authentication → Sign In / Providers*) logo depois
+  de criar o primeiro admin. O app **não** usa mais `signUp` com a chave anon: usuários são criados
+  pela Edge Function `admin-criar-usuario` (service role) ou convidados pelo dashboard — ambos
+  funcionam com o cadastro público desligado.
+  Mesmo que o cadastro público fique ligado, desde o `0004` quem se cadastrar sozinho nasce
+  **inativo, sem unidade** e não lê nada (nem catálogo/unidades) até um admin liberar.
+- **Confirm email** pode ficar ligado (convites e a Edge Function já confirmam o e-mail).
 - Em **Authentication → URL Configuration**, defina **Site URL** com o endereço do app
   (ex.: `https://etiquetas.macaw.com.br` ou `http://localhost:5173`) e adicione
-  `<site>/login` em **Redirect URLs** (usado pelo e-mail de redefinição de senha).
-- Opcional: desative **Allow new users to sign up** em *Authentication → Sign In / Providers*
-  **depois** de criar o primeiro admin, se quiser que apenas o admin crie contas.
-  (Com o cadastro público desativado, a criação de usuários pelo app também é bloqueada;
-  nesse caso crie/convide usuários pelo dashboard e ajuste papel/unidade na tela *Usuários*.)
+  `<site>/redefinir-senha` em **Redirect URLs** (links de “Esqueci minha senha” e de convite
+  abrem a tela de definir nova senha).
 
 ---
 
 ## 3. Criar o primeiro usuário (admin)
 
 O trigger `handle_new_user` cria automaticamente um registro em `perfis` para cada usuário do Auth.
-**O primeiro usuário cadastrado vira `admin`**; os seguintes entram como `cozinheiro`
-(o papel enviado no cadastro é ignorado por segurança — o admin ajusta depois).
+**O primeiro usuário cadastrado vira `admin` ativo**; os seguintes entram como `cozinheiro`
+**inativo e sem unidade** — papel e `unidade_id` enviados no metadata do cadastro são ignorados
+(qualquer pessoa com a chave anon poderia forjá-los). Só um admin libera o acesso.
 
 1. Dashboard → **Authentication → Users → Add user → Create new user**.
 2. Informe e-mail e senha e marque **Auto Confirm User**.
@@ -81,6 +89,24 @@ O trigger `handle_new_user` cria automaticamente um registro em `perfis` para ca
 4. Entre no app com esse e-mail/senha. O admin enxerga **todas as unidades**
    (`perfis.unidade_id` nulo) e cria os demais usuários em **Gestão → Usuários**.
 
+### 3.1 Criar os demais usuários
+
+**Opção A — pelo app (recomendado):** publique a Edge Function uma vez:
+
+```bash
+supabase functions deploy admin-criar-usuario
+# opcional: supabase secrets set ALLOWED_ORIGIN=https://etiquetas.macaw.com.br
+```
+
+Em **Gestão → Usuários → Novo usuário** o admin informa nome, e-mail, papel e unidade.
+Com senha inicial (≥ 8 caracteres) a conta é criada já confirmada; sem senha, o usuário
+recebe um **convite** por e-mail e define a senha em `/redefinir-senha`. A função verifica
+que quem chama é admin ativo e usa a service role apenas no servidor.
+
+**Opção B — sem Edge Function:** *Authentication → Users → Invite user* (ou *Add user*).
+O usuário aparece em **Gestão → Usuários** como “Aguardando liberação”; o admin escolhe
+papel e unidade e salva (RPC `admin_definir_perfil`, que só admins executam).
+
 Papéis:
 
 | Papel | Pode |
@@ -89,11 +115,11 @@ Papéis:
 | `gerente` | cadastros (produtos/modelos/checklists da sua unidade, categorias, fornecedores, equipamentos), relatórios, correção de registros da sua unidade |
 | `cozinheiro` | emitir/baixar etiquetas, registrar recebimentos, temperaturas, descartes e checklists da sua unidade |
 
-Para promover alguém manualmente (SQL Editor roda sem JWT, então o trigger de proteção permite):
+Para liberar/promover alguém manualmente (SQL Editor roda sem JWT, então o trigger de proteção permite):
 
 ```sql
 update public.perfis
-   set papel = 'gerente',
+   set papel = 'gerente', ativo = true,
        unidade_id = '11111111-1111-1111-1111-111111111111'  -- Macaw Camboinhas
  where email = 'chef@exemplo.com';
 -- Macaw Búzios: 22222222-2222-2222-2222-222222222222
@@ -125,6 +151,18 @@ VITE_SUPABASE_ANON_KEY=<chave anon / publishable>
 - `perfis_protege_campos`: o usuário comum só altera o próprio `nome`; papel, unidade, e-mail
   e situação só mudam por admin, e o último admin ativo não pode ser rebaixado/desativado.
 - Views usam `security_invoker = true` (respeitam o RLS de quem consulta).
+- (0004) Escrita direta pelo cliente em `etiquetas`: só `observacoes`/`modelo_id` podem ser
+  alterados; status, validade, método e snapshots mudam apenas pelas RPCs
+  (`dar_baixa_etiqueta`, `emitir_etiqueta_derivada`, `registrar_(re)impressao`,
+  `marcar_etiquetas_vencidas`), que são `security definer` e checam a unidade.
+  Na emissão, responsável/criador = usuário logado, status `ativa`, cozinheiro não excede a
+  validade padrão do produto (gerente/admin até 365 dias), manipulação não pode estar no
+  futuro nem (cozinheiro) a mais de 7 dias.
+- (0004) `etiqueta_movimentacoes` é imutável para o cliente (só triggers/RPCs gravam).
+- (0004) `descartes`: custo sempre calculado pelo produto (gerente/admin pode informar),
+  peso derivado da quantidade, limites para cozinheiro e etiqueta da mesma unidade.
+- (0004) `registros_temperatura`: conformidade recalculada em qualquer alteração.
+- (0004) Nenhuma função é executável por `anon`, exceto `consultar_etiqueta_publica`.
 
 ## 6. Etiquetas vencidas
 
@@ -150,9 +188,10 @@ Com Postgres 15+ instalado:
 createdb macaw_test
 for f in supabase/tests/auth_stub.sql supabase/migrations/0001_schema.sql \
          supabase/migrations/0002_rls_policies.sql supabase/migrations/0003_rpc_views.sql \
-         supabase/seed.sql; do
+         supabase/migrations/0004_correcoes_revisao.sql supabase/seed.sql; do
   psql -v ON_ERROR_STOP=1 -d macaw_test -f "$f" || break
 done
+psql -v ON_ERROR_STOP=1 -d macaw_test -f supabase/tests/smoke.sql   # base sem usuários
 ```
 
 Para simular um usuário logado: `set role authenticated; select set_config('request.jwt.claim.sub', '<uuid>', false);`.

@@ -33,6 +33,7 @@ import {
   horasParaDiasHoras,
   horasValidadeProduto,
   metodosDisponiveis,
+  validarPrazoEmissao,
 } from '@/lib/validade';
 import { formatarDataCurta, formatarRelativo } from '@/lib/format';
 import {
@@ -80,7 +81,8 @@ export default function EmitirEtiquetaPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { perfil } = useAuth();
+  const { perfil, temPapel } = useAuth();
+  const gestor = temPapel('admin', 'gerente');
   const { unidadeId, unidadeAtual } = useUnidade();
 
   const origemId = params.get('origem');
@@ -250,6 +252,11 @@ export default function EmitirEtiquetaPage() {
       dataValidade = null;
     }
   }
+  // Derivada no mesmo método não ultrapassa a validade da origem (mesma regra da RPC)
+  if (dataValidade && origem && origem.metodo === metodo) {
+    const limite = new Date(origem.data_validade);
+    if (limite.getTime() < dataValidade.getTime()) dataValidade = limite;
+  }
 
   const modelo: ModeloEtiqueta | typeof MODELO_FALLBACK = modelos.find((m) => m.id === modeloId) ?? MODELO_FALLBACK;
   const fornecedorNome = fornecedores.find((f) => f.id === fornecedorId)?.nome ?? null;
@@ -281,6 +288,16 @@ export default function EmitirEtiquetaPage() {
   if (!produto && !avulso && nomeProduto) erros.push('Selecione o produto da lista ou use como avulso.');
   if (!horasTotal) erros.push('Informe a validade (dias/horas).');
   if (!manipValida) erros.push('Data de manipulação inválida.');
+  else
+    erros.push(
+      ...validarPrazoEmissao({
+        horas: horasTotal,
+        horasPadrao,
+        manipulacao: dataManip,
+        gestor,
+        manipulacaoMinima: origem ? new Date(origem.data_manipulacao) : null,
+      }),
+    );
   if (quantidade.trim() && (qtd == null || qtd < 0)) erros.push('Quantidade inválida.');
 
   function alternarAlergenico(a: string) {
@@ -297,13 +314,13 @@ export default function EmitirEtiquetaPage() {
     try {
       let criadas: Etiqueta[] = [];
       if (origem) {
-        for (let i = 0; i < nCopias; i++) {
-          const e = await emitirEtiquetaDerivada(origem.id, tipo, metodo, {
-            quantidade: qtd ?? undefined,
-            validadeHoras: horasTotal ?? undefined,
-          });
-          criadas.push(e);
-        }
+        // Uma chamada para todas as cópias (a origem congelada só é baixada no fim)
+        criadas = await emitirEtiquetaDerivada(origem.id, tipo, metodo, {
+          quantidade: qtd ?? undefined,
+          validadeHoras: horasTotal ?? undefined,
+          copias: nCopias,
+          dataManipulacao: dataManip.toISOString(),
+        });
       } else {
         const input: NovaEtiquetaInput = {
           unidade_id: unidadeId,
@@ -724,6 +741,15 @@ export default function EmitirEtiquetaPage() {
             </Card>
           )}
         </aside>
+      </div>
+
+      <div className="fb-emitir-fixo" role="region" aria-label="Emitir etiqueta">
+        <span className="fb-emitir-fixo__info muted">
+          {erros.length ? erros[0] : dataValidade ? `Vence ${formatarDataCurta(dataValidade)}` : ''}
+        </span>
+        <Button variant="primary" loading={emitindo} disabled={erros.length > 0} onClick={() => emitir(true)}>
+          Emitir e imprimir{nCopias > 1 ? ` (${nCopias})` : ''}
+        </Button>
       </div>
     </div>
   );

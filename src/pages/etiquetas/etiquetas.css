@@ -295,3 +295,23 @@
     flex: 1 1 100%;
   }
 }
+
+/* Barra fixa de emissão no mobile (revisão: botão não fica no fim da página) */
+.fb-emitir-fixo { display: none; }
+@media (max-width: 1100px) {
+  .fb-emitir-fixo {
+    display: flex;
+    gap: var(--sp-3);
+    align-items: center;
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin: var(--sp-4) calc(-1 * var(--sp-4)) 0;
+    padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom, 0px));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06);
+  }
+  .fb-emitir-fixo .ui-btn { flex: 1 1 auto; }
+  .fb-emitir-fixo__info { font-size: var(--fs-sm); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

@@ -40,16 +40,27 @@ export function calcularValidade(dataManipulacao: Date | string, horas: number):
   return new Date(base.getTime() + horas * HORA_MS);
 }
 
-function mesmoDiaLocal(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+/** Fuso usado pelo banco (situacao_etiqueta / views) para "vence hoje". */
+export const FUSO_OPERACAO = 'America/Sao_Paulo';
+
+const fmtDiaOperacao = new Intl.DateTimeFormat('en-CA', {
+  timeZone: FUSO_OPERACAO,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** Dia civil (YYYY-MM-DD) no fuso da operação, independente do fuso do navegador. */
+export function diaOperacao(d: Date): string {
+  return fmtDiaOperacao.format(d);
 }
 
-/** Mesmas regras da view vw_etiquetas (hoje = mesmo dia civil no fuso local). */
+/** Mesmas regras da view vw_etiquetas (hoje = mesmo dia civil em America/Sao_Paulo). */
 export function situacaoValidade(dataValidade: Date | string, agora: Date = new Date()): SituacaoValidade {
   const v = toDate(dataValidade);
   const diff = v.getTime() - agora.getTime();
   if (diff <= 0) return 'vencida';
-  if (mesmoDiaLocal(v, agora)) return 'vence_hoje';
+  if (diaOperacao(v) === diaOperacao(agora)) return 'vence_hoje';
   if (diff <= 24 * HORA_MS) return 'vence_24h';
   if (diff <= 72 * HORA_MS) return 'vence_72h';
   return 'ok';
@@ -84,4 +95,43 @@ export function descreverPrazo(horas: number): string {
 /** PVPS: ordena por validade ascendente, sem mutar o array original. */
 export function ordenarPVPS<T extends { data_validade: string }>(itens: T[]): T[] {
   return [...itens].sort((a, b) => new Date(a.data_validade).getTime() - new Date(b.data_validade).getTime());
+}
+
+/** Limite absoluto de validade aceito pelo banco (365 dias). */
+export const VALIDADE_MAXIMA_HORAS = 8760;
+/** Manipulação retroativa máxima para cozinheiros (dias). */
+export const MANIPULACAO_RETROATIVA_MAX_DIAS = 7;
+
+/**
+ * Espelha public.validar_prazo_etiqueta (0004): retorna mensagens de erro
+ * (vazio = ok). Gestor = admin/gerente.
+ */
+export function validarPrazoEmissao(p: {
+  horas: number | null;
+  horasPadrao: number | null;
+  manipulacao: Date;
+  gestor: boolean;
+  agora?: Date;
+  manipulacaoMinima?: Date | null;
+}): string[] {
+  const agora = p.agora ?? new Date();
+  const erros: string[] = [];
+  const t = p.manipulacao.getTime();
+  if (Number.isNaN(t)) return ['Data de manipulação inválida.'];
+  if (t > agora.getTime() + HORA_MS) erros.push('A data de manipulação não pode estar no futuro.');
+  if (!p.gestor && t < agora.getTime() - MANIPULACAO_RETROATIVA_MAX_DIAS * 24 * HORA_MS) {
+    erros.push(`Manipulação com mais de ${MANIPULACAO_RETROATIVA_MAX_DIAS} dias: somente gerente ou administrador.`);
+  }
+  if (p.manipulacaoMinima && t < p.manipulacaoMinima.getTime()) {
+    erros.push('A manipulação não pode ser anterior à da etiqueta de origem.');
+  }
+  if (p.horas != null) {
+    if (p.horas > VALIDADE_MAXIMA_HORAS) erros.push('Validade máxima de 365 dias.');
+    else if (!p.gestor && p.horasPadrao != null && p.horas > p.horasPadrao) {
+      erros.push(
+        `Validade acima do padrão do produto (${descreverPrazo(p.horasPadrao)}). Somente gerente ou administrador pode estender.`,
+      );
+    }
+  }
+  return erros;
 }

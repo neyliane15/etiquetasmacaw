@@ -34,6 +34,7 @@ export default function ConsultaQrPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(false);
   const [abrindo, setAbrindo] = useState(false);
+  const [erroAbrir, setErroAbrir] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = `Etiqueta ${codigo} · Macaw`;
@@ -59,13 +60,18 @@ export default function ConsultaQrPage() {
 
   async function abrir() {
     setAbrindo(true);
+    setErroAbrir(null);
     try {
       const e = await getEtiquetaPorCodigo(codigo);
-      if (e) navigate(`/etiquetas/${e.id}`);
-      else setAbrindo(false);
-    } catch {
-      setAbrindo(false);
+      if (e) {
+        navigate(`/etiquetas/${e.id}`);
+        return;
+      }
+      setErroAbrir('Você não tem acesso à unidade desta etiqueta.');
+    } catch (err) {
+      setErroAbrir(err instanceof Error && err.message ? err.message : 'Não foi possível abrir a etiqueta.');
     }
+    setAbrindo(false);
   }
 
   const d = etq ? destaque(etq.situacao) : null;
@@ -159,6 +165,11 @@ export default function ConsultaQrPage() {
               <Button variant="primary" block loading={abrindo} onClick={abrir}>
                 Abrir no sistema
               </Button>
+            )}
+            {userId && erroAbrir && (
+              <div className="ui-error" role="alert" style={{ marginTop: 'var(--sp-2)' }}>
+                {erroAbrir}
+              </div>
             )}
           </>
         )}

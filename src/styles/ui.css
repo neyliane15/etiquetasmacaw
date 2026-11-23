@@ -434,3 +434,11 @@ a.ui-stat:hover { border-color: var(--border-strong); box-shadow: var(--shadow);
   position: absolute; left: 0; right: 0; bottom: -1px;
   height: 2px; background: var(--olive);
 }
+
+/* Colunas responsivas (revisão: "Situação" visível no mobile) */
+.ui-table .show-mobile { display: none; }
+@media (max-width: 720px) {
+  .ui-table .hide-mobile { display: none; }
+  .ui-table .show-mobile { display: block; }
+  .ui-table th, .ui-table td { padding-left: var(--sp-2); padding-right: var(--sp-2); }
+}

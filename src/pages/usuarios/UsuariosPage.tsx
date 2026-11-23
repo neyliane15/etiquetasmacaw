@@ -3,7 +3,7 @@ import { Badge, Button, Checkbox, FormRow, Input, Modal, PageHeader, Select, Tab
 import type { Column } from '@/components/ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnidade } from '@/contexts/UnidadeContext';
-import { criarUsuario, listPerfis, updatePerfil } from '@/lib/api';
+import { adminDefinirPerfil, criarUsuario, listPerfis, perfilPendente } from '@/lib/api';
 import { formatarData } from '@/lib/format';
 import { PAPEL_ROTULO } from '@/types/database';
 import type { BadgeVariant, PapelUsuario, Perfil, Unidade } from '@/types/database';
@@ -20,7 +20,8 @@ function UsuarioForm(p: { perfil: Perfil | null; unidades: Unidade[]; euId: stri
   const [senha, setSenha] = useState('');
   const [papel, setPapel] = useState<PapelUsuario>(u?.papel ?? 'cozinheiro');
   const [unidadeId, setUnidadeId] = useState<string>(u ? (u.unidade_id ?? '') : (p.unidades[0]?.id ?? ''));
-  const [ativo, setAtivo] = useState(u?.ativo ?? true);
+  // Usuário pendente (signup/convite ainda não liberado): o formulário já sugere liberar.
+  const [ativo, setAtivo] = useState(u ? u.ativo || perfilPendente(u) : true);
   const [salvando, setSalvando] = useState(false);
   const souEu = !!u && u.id === p.euId;
 
@@ -31,16 +32,21 @@ function UsuarioForm(p: { perfil: Perfil | null; unidades: Unidade[]; euId: stri
     setSalvando(true);
     try {
       if (u) {
-        await updatePerfil(u.id, { nome: nome.trim(), papel, unidade_id: unidadeId || null, ativo });
+        await adminDefinirPerfil(u.id, { nome: nome.trim(), papel, unidade_id: unidadeId || null, ativo });
         toast.success('Usuário atualizado.');
       } else {
-        if (!email.trim() || senha.length < 6) {
-          toast.error('Informe e-mail e senha com ao menos 6 caracteres.');
+        if (!email.trim()) {
+          toast.error('Informe o e-mail.');
           setSalvando(false);
           return;
         }
-        await criarUsuario({ email: email.trim(), senha, nome: nome.trim(), papel, unidade_id: unidadeId || null });
-        toast.success('Usuário criado.');
+        if (senha && senha.length < 8) {
+          toast.error('A senha inicial deve ter ao menos 8 caracteres (ou deixe em branco para enviar convite).');
+          setSalvando(false);
+          return;
+        }
+        await criarUsuario({ email: email.trim(), senha: senha || undefined, nome: nome.trim(), papel, unidade_id: unidadeId || null });
+        toast.success(senha ? 'Usuário criado.' : 'Convite enviado por e-mail.');
       }
       p.onSaved();
     } catch (err) {
@@ -65,11 +71,11 @@ function UsuarioForm(p: { perfil: Perfil | null; unidades: Unidade[]; euId: stri
         />
         {!u && (
           <Input
-            label="Senha inicial"
+            label="Senha inicial (opcional)"
             type="password"
             value={senha}
             onChange={(e) => setSenha(e.target.value)}
-            hint="Mínimo de 6 caracteres. O usuário pode trocar depois."
+            hint="Em branco: o usuário recebe um convite por e-mail para definir a senha. Mínimo de 8 caracteres."
             autoComplete="new-password"
           />
         )}
@@ -94,6 +100,17 @@ function UsuarioForm(p: { perfil: Perfil | null; unidades: Unidade[]; euId: stri
         />
       </FormRow>
       {u && <Checkbox label="Ativo (pode acessar o sistema)" checked={ativo} disabled={souEu} onChange={(e) => setAtivo(e.target.checked)} />}
+      {u && perfilPendente(u) && (
+        <p className="muted" style={{ margin: 0, fontSize: 'var(--fs-sm)' }}>
+          Cadastro aguardando liberação: escolha papel e unidade e salve para liberar o acesso.
+        </p>
+      )}
+      {!u && (
+        <p className="muted" style={{ margin: 0, fontSize: 'var(--fs-sm)' }}>
+          A conta é criada no servidor (Edge Function <span className="mono">admin-criar-usuario</span>). Sem a função
+          publicada, convide pelo painel do Supabase e libere o usuário nesta tela.
+        </p>
+      )}
       <div className="row" style={{ justifyContent: 'flex-end' }}>
         <Button variant="ghost" onClick={p.onCancel}>
           Cancelar
@@ -151,7 +168,12 @@ export default function UsuariosPage() {
     {
       key: 'ativo',
       header: 'Acesso',
-      render: (u) => <Badge variant={u.ativo ? 'success' : 'danger'}>{u.ativo ? 'Ativo' : 'Bloqueado'}</Badge>,
+      render: (u) =>
+        perfilPendente(u) ? (
+          <Badge variant="warning">Aguardando liberação</Badge>
+        ) : (
+          <Badge variant={u.ativo ? 'success' : 'danger'}>{u.ativo ? 'Ativo' : 'Bloqueado'}</Badge>
+        ),
     },
     { key: 'created_at', header: 'Desde', render: (u) => formatarData(u.created_at) },
     {
