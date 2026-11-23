@@ -1,0 +1,78 @@
+:root {
+  /* Marca — oliva (cor única da logo) */
+  --olive: #79731B;           /* primária */
+  --olive-700: #5C5714;       /* escura: hover, sidebar ativa, títulos */
+  --olive-900: #3F3B0D;
+  --olive-200: #E6E2B8;       /* clara: fundos de destaque, seleção */
+  --olive-100: #F0EDD3;
+
+  /* Fundos e superfícies */
+  --cream: #F3E7DB;           /* fundo da logo — fundo do app */
+  --bg: #F3E7DB;
+  --surface: #FBF6F0;         /* cards, tabelas, modais */
+  --surface-2: #F7EFE6;       /* cabeçalho de tabela, hover de linha */
+  --sand: #E3D5C3;            /* bordas areia */
+
+  /* Texto */
+  --text: #2E2A1F;            /* escuro quente */
+  --text-muted: #7A7262;
+  --text-inverse: #FBF6F0;
+
+  /* Bordas */
+  --border: #E3D5C3;          /* areia, 1px */
+  --border-strong: #CDBBA4;
+  --border-accent: #79731B;   /* filete oliva */
+
+  /* Semânticos discretos */
+  --danger: #A9502F;          /* terracota — vencido, erro */
+  --danger-bg: #F5E1D7;
+  --warning: #B8862B;         /* âmbar/mostarda — a vencer */
+  --warning-bg: #F6EACB;
+  --success: #79731B;         /* oliva — ok/conforme */
+  --success-bg: #ECE9C8;
+  --info: #5E6B6E;            /* cinza-ardósia — informativo */
+  --info-bg: #E6E6E0;
+  --neutral: #7A7262;
+  --neutral-bg: #EEE5DA;
+
+  --color-primary: var(--olive);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-info: var(--info);
+
+  /* Métodos de conservação (somente tela; impressão = preto) */
+  --metodo-resfriado: #5E7C86;     /* azul-acinzentado frio */
+  --metodo-congelado: #3E5560;     /* ardósia escura */
+  --metodo-ambiente: #9A7B4F;      /* areia escura */
+  --metodo-descongelando: #8A6A7E; /* malva discreto */
+
+  /* Detalhe de borda: filete oliva + linha creme dupla */
+  --rule-detail: 2px solid var(--olive);  /* filete superior */
+  --rule-double: 3px double var(--sand);  /* linha dupla creme/areia */
+
+  /* Tipografia */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --fs-xs: 11px; --fs-sm: 12px; --fs-base: 13px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 24px;
+  --lh: 1.45;
+  --tracking-caps: .08em;
+
+  /* Espaçamento compacto */
+  --sp-1: 2px; --sp-2: 4px; --sp-3: 8px; --sp-4: 12px; --sp-5: 16px; --sp-6: 24px; --sp-7: 32px;
+
+  /* Bordas e sombras (mínimas) */
+  --radius-sm: 2px; --radius: 4px; --radius-lg: 8px;
+  --border-w: 1px;
+  --shadow-sm: 0 1px 2px rgba(46, 42, 31, .05);
+  --shadow: 0 2px 10px rgba(46, 42, 31, .07);
+
+  /* Layout */
+  --sidebar-w: 216px;
+  --header-h: 48px;
+
+  /* Controles */
+  --control-h: 30px;
+  --control-h-sm: 24px;
+}

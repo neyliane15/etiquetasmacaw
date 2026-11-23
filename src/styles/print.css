@@ -1,0 +1,9 @@
+#print-root { display: none; }
+
+@media print {
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body > #root { display: none !important; }
+  #print-root { display: block; }
+  #print-root .label { page-break-after: always; break-after: page; box-shadow: none; border: none; }
+  .no-print { display: none !important; }
+}
