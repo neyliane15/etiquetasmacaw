@@ -8,7 +8,7 @@
 -- ---------------------------------------------------------------------
 -- 4.1 Extensões
 -- ---------------------------------------------------------------------
-create extension if not exists pgcrypto;   -- gen_random_uuid, gen_random_bytes
+create extension if not exists pgcrypto;   -- utilitários (gen_random_uuid é nativa no PG13+)
 create extension if not exists citext;     -- e-mails
 create extension if not exists pg_trgm;    -- busca por nome
 
@@ -83,7 +83,9 @@ declare
   i          int;
 begin
   loop
-    v_bytes  := gen_random_bytes(8);
+    -- gen_random_uuid() é nativa do Postgres (13+): não depende do pgcrypto,
+    -- que no Supabase fica no schema "extensions" (fora do search_path da função).
+    v_bytes  := decode(replace(gen_random_uuid()::text, '-', ''), 'hex');
     v_codigo := '';
     for i in 0..7 loop
       v_codigo := v_codigo || substr(v_alfabeto, (get_byte(v_bytes, i) % v_tam) + 1, 1);

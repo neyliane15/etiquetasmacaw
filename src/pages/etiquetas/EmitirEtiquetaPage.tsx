@@ -669,6 +669,9 @@ export default function EmitirEtiquetaPage() {
               <div className="fb-paper">
                 <LabelPreview data={labelData} modelo={modelo} escala={escalaPreview} />
               </div>
+              <p className="muted" style={{ fontSize: 'var(--fs-xs)', margin: 0 }}>
+                QR de exemplo: o código real é gerado ao emitir e só então funciona na leitura pelo celular.
+              </p>
               <FormRow cols={2}>
                 <Select
                   label="Modelo"

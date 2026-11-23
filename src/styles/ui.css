@@ -154,12 +154,19 @@
   box-shadow: var(--shadow-sm);
   min-width: 0;
 }
-.ui-card-accent::before {
+/* Filete superior que acompanha a curva dos cantos arredondados:
+   uma "borda" de 3px pintada com o gradiente e recortada por máscara. */
+.ui-card-accent::before,
+.ui-stat::before {
   content: '';
-  position: absolute; left: 0; right: 0; top: -1px;
-  height: 3px;
+  position: absolute; inset: -1px 0 auto 0; height: 24px;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  background: var(--rule-gradient);
+  border-top: 3px solid transparent;
+  background: var(--stat-bar, var(--rule-gradient)) border-box;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0) border-box;
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) padding-box exclude, linear-gradient(#000 0 0) border-box;
+  pointer-events: none;
 }
 .ui-card-head {
   display: flex; align-items: center; gap: var(--sp-3);
@@ -195,13 +202,7 @@
   min-width: 0;
   transition: border-color .12s, box-shadow .12s;
 }
-.ui-stat::before {
-  content: '';
-  position: absolute; left: -1px; right: -1px; top: -1px;
-  height: 3px;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  background: var(--stat-bar, var(--rule-gradient));
-}
+
 a.ui-stat:hover { border-color: var(--border-strong); box-shadow: var(--shadow); text-decoration: none; }
 .ui-stat-label {
   font-size: 10.5px;

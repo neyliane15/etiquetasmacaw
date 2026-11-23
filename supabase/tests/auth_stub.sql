@@ -5,6 +5,18 @@
 -- Para simular um usuário logado: select set_config('request.jwt.claim.sub', '<uuid>', false);
 -- =====================================================================
 
+-- Extensões como no Supabase: instaladas no schema "extensions", que NÃO
+-- entra no search_path das funções (set search_path = public). Assim os
+-- testes locais pegam erros como "gen_random_bytes does not exist".
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+create extension if not exists citext   with schema extensions;
+create extension if not exists pg_trgm  with schema extensions;
+set search_path = "$user", public, extensions;
+do $$ begin
+  execute format('alter database %I set search_path = "$user", public, extensions', current_database());
+end $$;
+
 -- Papéis do Supabase
 do $$
 begin

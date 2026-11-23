@@ -7,7 +7,9 @@ Siga na ordem. Cada etapa diz **onde clicar** e **o que conferir** antes de pass
 ## ETAPA 1 — Banco de dados no Supabase (≈ 5 min)
 
 Você só precisa de **um arquivo**: `supabase/TUDO_EM_UM.sql`.
-Ele junta, na ordem certa, `0001_schema` → `0002_rls_policies` → `0003_rpc_views` → `0004_correcoes_revisao` → `seed`.
+Ele junta, na ordem certa, `0001_schema` → `0002_rls_policies` → `0003_rpc_views` → `0004_correcoes_revisao` → `0005_corrige_codigo_etiqueta` → `seed`.
+
+> **Já rodou o banco antes de 23/11?** Rode só o `supabase/migrations/0005_corrige_codigo_etiqueta.sql` (corrige o erro *gen_random_bytes does not exist* ao emitir/imprimir).
 
 1. Acesse <https://supabase.com/dashboard> e abra o seu projeto.
 2. Menu lateral → **SQL Editor** → botão **+ New query**.
@@ -27,7 +29,7 @@ Ele junta, na ordem certa, `0001_schema` → `0002_rls_policies` → `0003_rpc_v
    Tem que aparecer **2 · 15 · 60 · 5 · 10 · 2**.
 
 > Prefere rodar arquivo por arquivo? Rode, nessa ordem: `0001_schema.sql`, `0002_rls_policies.sql`,
-> `0003_rpc_views.sql`, `0004_correcoes_revisao.sql`, `seed.sql`. O resultado é o mesmo.
+> `0003_rpc_views.sql`, `0004_correcoes_revisao.sql`, `0005_corrige_codigo_etiqueta.sql`, `seed.sql`. O resultado é o mesmo.
 >
 > **Não rode** os arquivos da pasta `supabase/tests/`: são só para teste local.
 
@@ -197,6 +199,8 @@ Faça como admin, nesta ordem:
 | "Novo usuário" dá erro | A função `admin-criar-usuario` não foi publicada (Etapa 4). |
 | Usuário entra e não vê nada | Está *Aguardando liberação*: em **Usuários**, defina papel e unidade e marque ativo. |
 | QR abre "localhost" ou não abre | Preencha `VITE_APP_URL` com o endereço público e publique de novo. |
+| Erro *function gen_random_bytes(integer) does not exist* | Rode `0005_corrige_codigo_etiqueta.sql` no SQL Editor. |
+| QR lido no celular não encontra o produto | O QR da pré-visualização é só exemplo (`PREVIEW0`). Leia o QR de uma etiqueta **emitida**. Se ainda falhar, confira `VITE_APP_URL` na Vercel (endereço completo com `https://`). |
 | Etiqueta sai cortada ou pequena | Margens *Nenhuma*, escala *100%*, papel igual ao modelo (Etapa 9). |
 | Etiqueta emitida com erro | Dê baixa como *Descartada* e emita de novo (por segurança, validade e status não podem ser editados). |
 | Etiquetas vencidas não mudam de status sozinhas | Elas mudam ao abrir o painel. Para automatizar: SQL Editor → `select cron.schedule('macaw-vencidas', '*/15 * * * *', $$select public.marcar_etiquetas_vencidas()$$);` (ative antes a extensão **pg_cron** em Database → Extensions). |

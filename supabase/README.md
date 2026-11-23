@@ -9,7 +9,8 @@ supabase/
 │   ├── 0001_schema.sql        # extensões, enums, tabelas, índices, funções e triggers
 │   ├── 0002_rls_policies.sql  # RLS, grants e trigger perfis_protege_campos
 │   ├── 0003_rpc_views.sql     # views (vw_*) e RPCs usadas pelo app
-│   └── 0004_correcoes_revisao.sql # correções de segurança/integridade da revisão (docs/REVISAO.md)
+│   ├── 0004_correcoes_revisao.sql # correções de segurança/integridade da revisão (docs/REVISAO.md)
+│   └── 0005_corrige_codigo_etiqueta.sql # corrige "gen_random_bytes does not exist" ao emitir
 ├── functions/admin-criar-usuario/ # Edge Function: admin cria/convida usuários (service role no servidor)
 ├── seed.sql                   # unidades, categorias, produtos, modelos, equipamentos, checklists
 └── tests/
@@ -17,7 +18,8 @@ supabase/
     └── smoke.sql              # smoke tests (T01–T22), transação com ROLLBACK
 ```
 
-> **Ordem obrigatória:** `0001` → `0002` → `0003` → `0004` → `seed.sql`.
+> **Ordem obrigatória:** `0001` → `0002` → `0003` → `0004` → `0005` → `seed.sql` (ou o `TUDO_EM_UM.sql`).
+> **Já aplicou 0001–0004?** Rode somente `0005_corrige_codigo_etiqueta.sql`.
 > **Já aplicou 0001–0003?** Basta executar `0004_correcoes_revisao.sql` (e, se quiser, o seed de novo).
 > Sempre que reaplicar migrações antigas, reaplique também as seguintes, na ordem (o `0004`
 > redefine funções e políticas criadas em `0001`–`0003`).
@@ -32,7 +34,7 @@ supabase/
 1. Abra o projeto em <https://supabase.com/dashboard> → **SQL Editor** → **New query**.
 2. Cole o conteúdo de `migrations/0001_schema.sql` e clique em **Run**.
 3. Repita, **nessa ordem**, com `0002_rls_policies.sql`, `0003_rpc_views.sql`,
-   `0004_correcoes_revisao.sql` e `seed.sql`.
+   `0004_correcoes_revisao.sql`, `0005_corrige_codigo_etiqueta.sql` e `seed.sql`.
 4. Confira em **Table Editor** que as tabelas `unidades`, `produtos`, `modelos_etiqueta` etc. foram criadas
    e populadas (2 unidades, 15 categorias, 60 produtos, 5 modelos, 10 equipamentos, 2 checklists).
 
@@ -188,7 +190,8 @@ Com Postgres 15+ instalado:
 createdb macaw_test
 for f in supabase/tests/auth_stub.sql supabase/migrations/0001_schema.sql \
          supabase/migrations/0002_rls_policies.sql supabase/migrations/0003_rpc_views.sql \
-         supabase/migrations/0004_correcoes_revisao.sql supabase/seed.sql; do
+         supabase/migrations/0004_correcoes_revisao.sql \
+         supabase/migrations/0005_corrige_codigo_etiqueta.sql supabase/seed.sql; do
   psql -v ON_ERROR_STOP=1 -d macaw_test -f "$f" || break
 done
 psql -v ON_ERROR_STOP=1 -d macaw_test -f supabase/tests/smoke.sql   # base sem usuários
