@@ -115,75 +115,104 @@ Campos impressos: nome do produto, **tipo** de etiqueta, **método de conservaç
 
 ---
 
-## 3. Identidade visual
+## 3. Identidade visual (logo oficial)
 
-Não há logo em arquivo. Logo provisória em **`src/assets/logo.svg`** (Frontend A): arara estilizada simples (formas geométricas nas 4 cores) + texto “MACAW” — substituível sem alterar código (importada como URL: `import logoUrl from '@/assets/logo.svg'`).
+Logo oficial recebida: **silhueta de arara em voo, cor única verde-oliva `#79731B` sobre fundo creme/rosado `#F3E7DB`**. Arquivo-fonte: **`src/assets/logo-macaw.jpg`** (1080×1080, já no repositório — não alterar).
+
+- **Frontend A** gera **`src/assets/logo.svg`**: vetorização da silhueta (um `<path>` único, `fill="currentColor"`, `viewBox` quadrado, sem fundo), para herdar a cor do contexto (oliva na UI, **preto** na etiqueta). Se a vetorização fiel não for viável, o SVG embute o JPG (`<image href>`) como fallback — mas a preferência é o path. Importação: `import logoUrl from '@/assets/logo.svg'` (como `<img>`) ou componente `src/components/layout/Logo.tsx` que injeta o SVG inline (`?raw`) para usar `currentColor`. Ver §5 (Logo.tsx é do Frontend A).
+- **Favicon**: `public/favicon.svg` (mesma silhueta, oliva `#79731B` sobre círculo `#F3E7DB`) + `<link rel="icon" type="image/svg+xml" href="/favicon.svg">` e `<meta name="theme-color" content="#79731B">` no `index.html` (Frontend A).
+- **Etiquetas impressas são monocromáticas** (impressora térmica): logo e todos os elementos em **preto puro** sobre branco; nenhuma cor da paleta é usada no `@media print`.
+
+Estética: **elegante e minimalista** — muito respiro relativo, fontes pequenas, bordas finas, poucos acentos de cor; a cor oliva é a única cor de marca.
 
 ### 3.1 Tokens (`src/styles/tokens.css`, em `:root`)
 ```css
 :root {
-  /* Paleta arara */
-  --macaw-blue: #0B3D91;      /* azul profundo — primária */
-  --macaw-blue-600: #0A3380;
-  --macaw-blue-50: #EAF0FB;
-  --macaw-red: #D7263D;       /* vermelho escarlate — perigo/vencido */
-  --macaw-red-50: #FDECEE;
-  --macaw-yellow: #F5B700;    /* amarelo ouro — atenção */
-  --macaw-yellow-50: #FFF7DB;
-  --macaw-green: #1B998B;     /* verde — ok/conforme */
-  --macaw-green-50: #E6F5F3;
+  /* Marca — oliva (cor única da logo) */
+  --olive: #79731B;           /* primária */
+  --olive-700: #5C5714;       /* escura: hover, sidebar ativa, títulos */
+  --olive-900: #3F3B0D;
+  --olive-200: #E6E2B8;       /* clara: fundos de destaque, seleção */
+  --olive-100: #F0EDD3;
 
-  /* Neutros */
-  --bg: #FAF8F3;              /* off-white */
-  --surface: #FFFFFF;
-  --surface-2: #F3F1EC;
-  --border: #E2DED5;
-  --border-strong: #CFC9BD;
-  --text: #1E2230;
-  --text-muted: #6B7080;
-  --text-inverse: #FFFFFF;
+  /* Fundos e superfícies */
+  --cream: #F3E7DB;           /* fundo da logo — fundo do app */
+  --bg: #F3E7DB;
+  --surface: #FBF6F0;         /* cards, tabelas, modais */
+  --surface-2: #F7EFE6;       /* cabeçalho de tabela, hover de linha */
+  --sand: #E3D5C3;            /* bordas areia */
 
-  /* Semânticos */
-  --color-primary: var(--macaw-blue);
-  --color-danger: var(--macaw-red);
-  --color-warning: var(--macaw-yellow);
-  --color-success: var(--macaw-green);
-  --color-info: var(--macaw-blue);
+  /* Texto */
+  --text: #2E2A1F;            /* escuro quente */
+  --text-muted: #7A7262;
+  --text-inverse: #FBF6F0;
 
-  /* Métodos de conservação (badges e etiqueta) */
-  --metodo-resfriado: #2B7BD6;
-  --metodo-congelado: #0B3D91;
-  --metodo-ambiente: #B7791F;
-  --metodo-descongelando: #7B5EA7;
+  /* Bordas */
+  --border: #E3D5C3;          /* areia, 1px */
+  --border-strong: #CDBBA4;
+  --border-accent: #79731B;   /* filete oliva */
 
-  /* Faixa multicolor */
-  --stripe: linear-gradient(90deg,
-    var(--macaw-blue) 0 25%, var(--macaw-red) 25% 50%,
-    var(--macaw-yellow) 50% 75%, var(--macaw-green) 75% 100%);
+  /* Semânticos discretos */
+  --danger: #A9502F;          /* terracota — vencido, erro */
+  --danger-bg: #F5E1D7;
+  --warning: #B8862B;         /* âmbar/mostarda — a vencer */
+  --warning-bg: #F6EACB;
+  --success: #79731B;         /* oliva — ok/conforme */
+  --success-bg: #ECE9C8;
+  --info: #5E6B6E;            /* cinza-ardósia — informativo */
+  --info-bg: #E6E6E0;
+  --neutral: #7A7262;
+  --neutral-bg: #EEE5DA;
+
+  --color-primary: var(--olive);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-info: var(--info);
+
+  /* Métodos de conservação (somente tela; impressão = preto) */
+  --metodo-resfriado: #5E7C86;     /* azul-acinzentado frio */
+  --metodo-congelado: #3E5560;     /* ardósia escura */
+  --metodo-ambiente: #9A7B4F;      /* areia escura */
+  --metodo-descongelando: #8A6A7E; /* malva discreto */
+
+  /* Detalhe de borda: filete oliva + linha creme dupla */
+  --rule-detail: 2px solid var(--olive);  /* filete superior */
+  --rule-double: 3px double var(--sand);  /* linha dupla creme/areia */
 
   /* Tipografia */
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif; /* opcional: títulos de página e marca */
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   --fs-xs: 11px; --fs-sm: 12px; --fs-base: 13px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 24px;
-  --lh: 1.4;
+  --lh: 1.45;
+  --tracking-caps: .08em;     /* rótulos em caixa alta */
 
   /* Espaçamento compacto */
   --sp-1: 2px; --sp-2: 4px; --sp-3: 8px; --sp-4: 12px; --sp-5: 16px; --sp-6: 24px; --sp-7: 32px;
 
-  /* Bordas e sombras */
-  --radius-sm: 3px; --radius: 6px; --radius-lg: 10px;
+  /* Bordas e sombras (mínimas) */
+  --radius-sm: 2px; --radius: 4px; --radius-lg: 8px;
   --border-w: 1px;
-  --shadow-sm: 0 1px 2px rgba(20, 24, 40, .06);
-  --shadow: 0 2px 8px rgba(20, 24, 40, .08);
+  --shadow-sm: 0 1px 2px rgba(46, 42, 31, .05);
+  --shadow: 0 2px 10px rgba(46, 42, 31, .07);
 
   /* Layout */
-  --sidebar-w: 220px;
+  --sidebar-w: 216px;
   --header-h: 48px;
 }
 ```
-Regras: `body { font: var(--fs-base)/var(--lh) var(--font-sans); background: var(--bg); color: var(--text); }`. Cards e header com **borda superior multicolor de 3px** (`border-image: var(--stripe) 1` ou pseudo-elemento `::before` com `background: var(--stripe); height: 3px`). Bordas finas de 1px `--border`. Inter via Google Fonts no `index.html` (fallback system). Botões compactos (altura 30px), inputs 30px. Sidebar azul profundo com item ativo marcado por barra lateral amarela.
+Regras visuais:
+- `body { font: var(--fs-base)/var(--lh) var(--font-sans); background: var(--bg); color: var(--text); }`.
+- **Cards / modais / header**: fundo `--surface`, borda 1px `--border`, **filete oliva de 2px no topo** (`border-top: var(--rule-detail)`) e, abaixo do título do card, **linha dupla creme** (`border-bottom: var(--rule-double)`). Classe utilitária `.rule-top` (filete) e `.rule-double` (linha dupla).
+- Títulos de página em `--olive-700`, peso 600 (ou `--font-display` se carregada); rótulos de formulário e cabeçalhos de tabela em caixa alta `--fs-xs` com `letter-spacing: var(--tracking-caps)` e cor `--text-muted`.
+- **Sidebar**: fundo `--surface` com borda direita 1px `--border`; logo oliva no topo; item ativo com texto `--olive-700`, fundo `--olive-100` e filete esquerdo 2px `--olive`. (Sem blocos de cor sólida.)
+- **Botões** (30px de altura): `primary` = fundo `--olive`, texto `--text-inverse`, hover `--olive-700`; `secondary` = fundo transparente, borda `--border-strong`, texto `--text`; `danger` = terracota; `warning` = mostarda; `success` = oliva; `ghost` = sem borda.
+- Inputs 30px, borda `--border-strong`, foco com `outline: 2px solid var(--olive-200)` e borda `--olive`.
+- Badges: pílula pequena, texto na cor semântica sobre fundo `*-bg`, sem borda grossa.
+- Fontes via Google Fonts no `index.html`: Inter (400/500/600) e, opcional, Cormorant Garamond (500/600). Fallback system.
 
-Classes utilitárias globais (Frontend A, `src/styles/global.css`): `.stack` (flex column gap `--sp-3`), `.row` (flex row gap `--sp-3` align center), `.grid-2`, `.grid-3`, `.muted`, `.mono`, `.stripe-top`, `.sr-only`, `.text-danger`, `.text-success`, `.text-warning`.
+Classes utilitárias globais (Frontend A, `src/styles/global.css`): `.stack` (flex column gap `--sp-3`), `.row` (flex row gap `--sp-3` align center), `.grid-2`, `.grid-3`, `.muted`, `.mono`, `.caps`, `.rule-top`, `.rule-double`, `.sr-only`, `.text-danger`, `.text-success`, `.text-warning`.
 
 ---
 
@@ -246,7 +275,7 @@ create type frequencia_checklist as enum ('diario','abertura','fechamento','sema
 |---|---|---|
 | id | uuid PK | |
 | nome | text | not null unique |
-| cor | text | not null default '#0B3D91' (hex) |
+| cor | text | not null default '#79731B' (hex; seed usa tons terrosos discretos: oliva, terracota, mostarda, ardósia, areia, malva) |
 | ordem | int | not null default 0 |
 | temp_recebimento_max_c | numeric(5,1) | null (temperatura máxima aceita no recebimento) |
 | ativo | boolean | not null default true |
@@ -558,7 +587,7 @@ RPCs (`language plpgsql`, `set search_path = public`):
 
 ### 4.8 Seed (Backend B — `supabase/seed.sql`, idempotente com `on conflict do nothing`)
 - **Unidades**: `Macaw Camboinhas` (slug `camboinhas`, Niterói/RJ) e `Macaw Búzios` (slug `buzios`, Armação dos Búzios/RJ). UUIDs fixos: `11111111-1111-1111-1111-111111111111` (Camboinhas) e `22222222-2222-2222-2222-222222222222` (Búzios).
-- **Categorias** (com cor e temp. máx. recebimento): Carnes bovinas (7 °C), Aves (4 °C), Suínos (7 °C), Pescados e frutos do mar (3 °C), Laticínios e frios (7 °C), Hortifrúti (10 °C), Ovos, Secos e grãos, Molhos e caldos, Massas, Sobremesas e confeitaria, Bebidas, Congelados industrializados (-12 °C), Pré-preparos / mise en place, Pães.
+- **Categorias** (com cor em tons terrosos discretos harmonizados com o oliva `#79731B` e temp. máx. recebimento): Carnes bovinas (7 °C), Aves (4 °C), Suínos (7 °C), Pescados e frutos do mar (3 °C), Laticínios e frios (7 °C), Hortifrúti (10 °C), Ovos, Secos e grãos, Molhos e caldos, Massas, Sobremesas e confeitaria, Bebidas, Congelados industrializados (-12 °C), Pré-preparos / mise en place, Pães.
 - **Produtos** (≥ 40, validades em horas — referência CVS-5/práticas usuais, **a validar pelo RT**): ex.: Filé mignon porcionado (resfr. 72, cong. 720, descong. 72), Picanha, Carne moída (resfr. 24, cong. 720, descong. 24), Frango peito (72/720/72), Coxa/sobrecoxa, Linguiça, Bacon aberto (resfr. 120), Salmão (24/720/24), Camarão limpo (24/720/24), Polvo cozido (72/720), Lula, Peixe branco, Queijo muçarela aberto (120), Parmesão ralado (120), Presunto fatiado (72), Creme de leite aberto (72), Leite aberto (72), Manteiga (ambiente aberto não; resfr. 720), Iogurte, Ovos (ambiente 336 / resfr. 504), Ovo cozido (72), Alface higienizada (48), Tomate picado (48), Cebola picada (72), Ervas frescas (72), Mix de folhas (48), Arroz cozido (resfr. 72, cong. 720), Feijão cozido (72/720), Molho de tomate (72/720), Caldo de peixe (72/720), Fundo escuro (72/720), Molho bechamel (48), Maionese de casa (24), Massa fresca (72/720), Pão de fermentação natural (amb. 48, cong. 720), Farinha de trigo aberta (amb. 2160), Arroz cru aberto (amb. 2160), Azeite aberto (amb. 2160), Leite de coco aberto (72), Chantilly (72), Mousse (72/720), Sorvete artesanal (cong. 720), Calda de chocolate (resfr. 168). Alergênicos preenchidos (glúten, leite, ovos, crustáceos, peixes, soja, etc.).
 - **Modelos de etiqueta** (globais): `Padrão 60×40` (padrao=true; produto, tipo, metodo, data_manipulacao, validade, responsavel, codigo, qr), `Completa 60×60` (+ lote, fornecedor, sif, quantidade, alergenicos), `Compacta 50×30` (produto, metodo, validade, codigo, qr), `Recebimento 100×50` (todos + unidade, logo), `Mínima 40×40` (produto, validade, qr).
 - **Equipamentos** por unidade: Geladeira cozinha (0 a 5 °C), Freezer (≤ -18: min null, max -18), Câmara fria (0 a 4), Balcão térmico (min 60, max null), Geladeira bar (0 a 7).
@@ -592,7 +621,8 @@ Constante TS `FAIXA_METODO` (§6).
 - Raiz: `package.json`, `vite.config.ts`, `tsconfig.json`, `tsconfig.node.json`, `index.html`, `.env.example`, `.gitignore`, `README.md` (raiz, curto: como rodar).
 - `src/main.tsx`, `src/App.tsx` (rotas §9), `src/vite-env.d.ts`, `src/test/setup.ts`.
 - `src/styles/tokens.css`, `src/styles/global.css`, `src/styles/print.css`, `src/styles/layout.css`, `src/styles/ui.css`.
-- `src/assets/logo.svg`.
+- `src/assets/logo.svg` (vetorização da silhueta de `src/assets/logo-macaw.jpg`, `fill="currentColor"`), `public/favicon.svg`, `src/components/layout/Logo.tsx` (`export function Logo(p: { size?: number; className?: string; title?: string }): JSX.Element` — SVG inline com `currentColor`; usado no layout, login, página pública e etiqueta).
+- **Não alterar** `src/assets/logo-macaw.jpg` (arquivo oficial).
 - `src/contexts/AuthContext.tsx`, `src/contexts/UnidadeContext.tsx` (§10).
 - `src/components/layout/AppLayout.tsx`, `Sidebar.tsx`, `Header.tsx`, `UnidadeSelector.tsx`, `RequireAuth.tsx`, `RequireRole.tsx`.
 - `src/components/ui/*` (§11) + `src/components/ui/index.ts` (barrel).
@@ -802,7 +832,7 @@ export function corSituacao(s: SituacaoEtiqueta): BadgeVariant; // vencida→'da
 export function urlConsultaQr(codigo: string, origin?: string): string; // `${origin ?? window.location.origin}/q/${codigo}`
 export function normalizarCodigo(input: string): string; // upper, remove espaços; se for URL contendo '/q/', extrai o código
 ```
-`BadgeVariant` é importado de `@/components/ui` (Frontend A) — para evitar ciclo, **definir `BadgeVariant` em `src/types/database.ts`**: `export type BadgeVariant = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'blue' | 'red' | 'yellow' | 'green';` e o Badge importa de lá.
+`BadgeVariant` é importado de `@/components/ui` (Frontend A) — para evitar ciclo, **definir `BadgeVariant` em `src/types/database.ts`**: `export type BadgeVariant = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'olive';` e o Badge importa de lá.
 
 ---
 
@@ -839,7 +869,7 @@ export function normalizarCodigo(input: string): string; // upper, remove espaç
 
 Páginas de Frontend B carregadas com `React.lazy(() => import('@/pages/...'))` + `<Suspense fallback={<Spinner/>}>`. Restrição por papel: `<RequireRole papeis={['admin','gerente']}>`.
 
-Sidebar (ordem, com ícones SVG inline simples): Painel · Emitir etiqueta (destaque, botão vermelho) · Etiquetas · Baixa rápida · Recebimento · Temperaturas · Descartes · Checklists · — Cadastros: Produtos · Categorias · Fornecedores · Modelos · Equipamentos · — Gestão: Relatórios · Usuários · Unidades. Itens ocultos conforme papel. Header: nome da página, `UnidadeSelector`, nome/papel do usuário, sair. Responsivo: abaixo de 900px a sidebar vira gaveta (botão ☰).
+Sidebar (ordem, com ícones SVG inline simples): Painel · Emitir etiqueta (destaque, botão primário oliva) · Etiquetas · Baixa rápida · Recebimento · Temperaturas · Descartes · Checklists · — Cadastros: Produtos · Categorias · Fornecedores · Modelos · Equipamentos · — Gestão: Relatórios · Usuários · Unidades. Itens ocultos conforme papel. Header: nome da página, `UnidadeSelector`, nome/papel do usuário, sair. Responsivo: abaixo de 900px a sidebar vira gaveta (botão ☰).
 
 ---
 
@@ -890,9 +920,9 @@ interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>
 export const Select: ForwardRef<HTMLSelectElement, SelectProps>; // placeholder vira <option value="">
 
 // Card.tsx
-interface CardProps extends React.HTMLAttributes<HTMLDivElement> { title?: React.ReactNode; actions?: React.ReactNode; stripe?: boolean /* default true: faixa multicolor no topo */; padding?: 'none' | 'sm' | 'md'; }
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> { title?: React.ReactNode; actions?: React.ReactNode; accent?: boolean /* default true: filete oliva no topo + linha dupla creme sob o título */; padding?: 'none' | 'sm' | 'md'; }
 export function Card(p: CardProps): JSX.Element;
-interface StatCardProps { label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: 'blue' | 'red' | 'yellow' | 'green' | 'neutral'; to?: string /* link */; }
+interface StatCardProps { label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: 'olive' | 'danger' | 'warning' | 'success' | 'neutral'; to?: string /* link */; }
 export function StatCard(p: StatCardProps): JSX.Element;
 
 // Table.tsx
@@ -954,10 +984,11 @@ export function QrCode(p: { value: string; sizeMm: number; className?: string })
 export interface LabelPreviewProps { data: LabelData; modelo: Pick<ModeloEtiqueta, 'largura_mm' | 'altura_mm' | 'campos' | 'fonte_base_pt' | 'mostrar_logo'>; escala?: number /* só na tela; default 1 */; qrOrigin?: string; }
 export function LabelPreview(p: LabelPreviewProps): JSX.Element;
 // raiz: <div className="label" data-testid="label-preview" style={{ width: `${largura_mm}mm`, height: `${altura_mm}mm`, fontSize: `${fonte_base_pt}pt` }}>
-// layout: faixa do método no topo (cor --metodo-*, texto METODO_ROTULO + FAIXA_METODO, em preto/branco p/ térmica),
+// layout (100% monocromático — preto sobre branco, inclusive na tela, para refletir a térmica): faixa do método no topo em texto invertido (fundo preto, letra branca: METODO_ROTULO + FAIXA_METODO),
+// logo (componente Logo em preto, quando mostrar_logo/'logo' ∈ campos),
 // nome do produto em negrito (até 2 linhas, ellipsis), validade destacada 'VAL: dd/MM HH:mm' em caixa com borda grossa,
 // demais campos em linhas 'Rótulo: valor', QR à direita (quando 'qr' ∈ campos) com código abaixo em mono.
-// Impressão térmica é monocromática: no @media print, cores → preto, faixa do método vira texto invertido (fundo preto, letra branca).
+// Impressão térmica é monocromática: nenhuma cor da paleta em label.css; use #000 e #fff apenas. Na tela o preview fica sobre um 'papel' branco com sombra leve.
 
 // LabelPrintSheet.tsx
 export function LabelPrintSheet(p: { itens: LabelData[]; modelo: LabelPreviewProps['modelo'] }): JSX.Element; // cada etiqueta numa página (page-break-after: always)
@@ -981,7 +1012,7 @@ Frontend A garante em `index.html` um `<div id="print-root"></div>` após `#root
 
 Fluxo Emitir etiqueta: escolher produto (busca com autocomplete) → tipo → método (só os disponíveis; preenche validade padrão, editável em dias/horas) → data/hora de manipulação (default agora) → campos opcionais (lote, fornecedor, SIF, quantidade, observações) → modelo (default `getModeloPadrao`) → cópias → **preview ao vivo** → “Emitir e imprimir” (`emitirEtiquetas` → `imprimirEtiquetas` → `registrarImpressao`). Produto sem validade para o método: exigir validade manual.
 
-Página pública `/q/:codigo`: logo, nome do produto grande, situação com Badge colorido grande (VENCIDA vermelho / OK verde), datas, método, unidade, alergênicos; se usuário logado, botão “Abrir no sistema” → `/etiquetas/:id` via `getEtiquetaPorCodigo`. Código inexistente → EmptyState.
+Página pública `/q/:codigo`: logo, nome do produto grande, situação com Badge grande (VENCIDA terracota / A VENCER mostarda / OK oliva), fundo `--bg` creme, datas, método, unidade, alergênicos; se usuário logado, botão “Abrir no sistema” → `/etiquetas/:id` via `getEtiquetaPorCodigo`. Código inexistente → EmptyState.
 
 ---
 
