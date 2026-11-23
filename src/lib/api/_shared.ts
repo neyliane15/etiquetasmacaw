@@ -29,8 +29,8 @@ export function sanitizarBusca(s: string): string {
 }
 
 /** Remove chaves com valor `undefined` (para não sobrescrever defaults do banco). */
-export function semUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+export function semUndefined<T extends object>(obj: T): Partial<T> {
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) if (v !== undefined) out[k] = v;
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) if (v !== undefined) out[k] = v;
   return out as Partial<T>;
 }
