@@ -221,7 +221,8 @@
     page-break-inside: avoid;
     break-inside: avoid;
   }
-  .label:last-child {
+  .label:last-child,
+  #print-root .label-sheet > .label:last-child {
     page-break-after: auto;
     break-after: auto;
   }

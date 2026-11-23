@@ -1,0 +1,58 @@
+.tmp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--sp-4);
+}
+
+.tmp-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: var(--rule-detail);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.tmp-card--nc {
+  border-top-color: var(--danger);
+}
+.tmp-card--sem {
+  border-top-color: var(--border-strong);
+}
+
+.tmp-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: var(--rule-double);
+}
+.tmp-card__nome {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tmp-card__valor {
+  font-size: var(--fs-2xl);
+  font-weight: 300;
+  color: var(--olive-900);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.tmp-card--nc .tmp-card__valor {
+  color: var(--danger);
+}
+.tmp-card__form {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-end;
+  margin-top: var(--sp-2);
+}
+.tmp-card__form > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}

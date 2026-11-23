@@ -282,7 +282,7 @@
   text-align: right;
 }
 
-.fb-scan {
+.fb-scan input {
   font-family: var(--font-mono);
   font-size: var(--fs-xl) !important;
   letter-spacing: 0.12em;
