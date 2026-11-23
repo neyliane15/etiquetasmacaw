@@ -106,9 +106,13 @@ export function corSituacao(s: SituacaoEtiqueta): BadgeVariant {
   return COR_SITUACAO[s] ?? 'neutral';
 }
 
-/** `${origin}/q/${codigo}` */
+/**
+ * `${base}/q/${codigo}`. Base: `origin` informado → VITE_APP_URL (endereço público do app,
+ * para o QR funcionar mesmo imprimindo de localhost) → window.location.origin.
+ */
 export function urlConsultaQr(codigo: string, origin?: string): string {
-  const base = (origin ?? (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/+$/, '');
+  const envUrl = import.meta.env?.VITE_APP_URL || undefined;
+  const base = (origin ?? envUrl ?? (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/+$/, '');
   return `${base}/q/${encodeURIComponent(codigo)}`;
 }
 
